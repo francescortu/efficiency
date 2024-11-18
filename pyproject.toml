@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "efficiency"
+version = "0.1.0"
+description = ""
+authors = ["Francesc0rtu <francescortu@live.it>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+torchvision = "^0.20.1"
+transformers = {git = "https://www.github.com/francescortu/transformers.git", rev = "easyroutine"}
+rich = "^13.9.4"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

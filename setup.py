@@ -10,7 +10,7 @@ with open("requirements.txt", "r", encoding="utf-8") as f:
 
 setup(
     name="easyroutine",
-    version="0.2",
+    version="0.3.1",
     packages=find_packages(),
     description="A utility library for routine tasks",
     long_description=long_description,

@@ -105,7 +105,7 @@ class HookedModel:
         )
         if processor is True:
             self.processor = tokenizer
-            self.text_tokenizer = self.processor.tokenizer
+            self.text_tokenizer = self.processor.tokenizer # type: ignore
             self.hf_tokenizer = self.processor
         else:
             self.processor = None
@@ -154,7 +154,7 @@ class HookedModel:
         If the tokenizer is a processor, return just the tokenizer. If the tokenizer is a tokenizer, return the tokenizer
         """
         if self.processor is not None:
-            return self.processor.tokenizer
+            return self.processor.tokenizer # type: ignore
         return self.hf_tokenizer
 
     def get_processor(self):
@@ -183,7 +183,7 @@ class HookedModel:
             tokens = tokens.tolist()
         string_tokens = []
         for tok in tokens:
-            string_tokens.append(self.hf_tokenizer.decode(tok))
+            string_tokens.append(self.hf_tokenizer.decode(tok)) # type: ignore
         return string_tokens
 
     def create_hooks(
@@ -369,23 +369,23 @@ class HookedModel:
                 "The hook for the average is not working with token_index as a list"
             )
 
-            hooks.extend(
-                [
-                    {
-                        "component": self.model_config.residual_stream_hook_name.format(
-                            i
-                        ),
-                        "intervention": partial(
-                            avg_hook,
-                            cache=cache,
-                            cache_key="resid_avg_{}".format(i),
-                            last_image_idx=last_image_idxs,
-                            end_image_idx=end_image_idxs,
-                        ),
-                    }
-                    for i in range(0, self.model_config.num_hidden_layers)
-                ]
-            )
+            # hooks.extend(
+            #     [
+            #         {
+            #             "component": self.model_config.residual_stream_hook_name.format(
+            #                 i
+            #             ),
+            #             "intervention": partial(
+            #                 avg_hook,
+            #                 cache=cache,
+            #                 cache_key="resid_avg_{}".format(i),
+            #                 last_image_idx=last_image_idxs, #type
+            #                 end_image_idx=end_image_idxs,
+            #             ),
+            #         }
+            #         for i in range(0, self.model_config.num_hidden_layers)
+            #     ]
+            # )
         if extract_resid_mid:
             hooks += [
                 {
@@ -524,7 +524,7 @@ class HookedModel:
                                 self.hf_model,
                                 f"{self.model_config.attn_out_proj_bias.format(i)}",
                             ),
-                            head=attn_heads,
+                            head="all",
                         ),
                     }
                     for i in range(0, self.model_config.num_hidden_layers)
@@ -578,7 +578,7 @@ class HookedModel:
                             attention_pattern_head,
                             cache=cache,
                             layer=i,
-                            head=attn_heads,
+                            head="all",
                         ),
                     }
                     for i in range(0, self.model_config.num_hidden_layers)
@@ -794,22 +794,7 @@ class HookedModel:
     def extract_cache(
         self,
         dataloader,
-        extracted_token_position: List[
-            Literal[
-                "last",
-                "last-2",
-                "last-3",
-                "last-image",
-                "end-image",
-                "all-image",
-                "all-text",
-                "all",
-                "special",
-                "random-text",
-                "random-image",
-                "random-image-10",
-            ]
-        ],
+        extracted_token_position: List[str],
         batch_saver: Callable = lambda x: None,
         move_to_cpu_after_forward: bool = True,
         **kwargs,
@@ -886,22 +871,7 @@ class HookedModel:
     @torch.no_grad()
     def compute_patching(
         self,
-        extracted_token_position: List[
-            Literal[
-                "last",
-                "last-2",
-                "last-3",
-                "last-image",
-                "end-image",
-                "all-image",
-                "all-text",
-                "all",
-                "special",
-                "random-text",
-                "random-image",
-                "random-image-10",
-            ]
-        ],
+        extracted_token_position: List[str],
         # counterfactual_dataset,
         base_dataloader,
         target_dataloader,
@@ -953,6 +923,22 @@ class HookedModel:
 
             args = {
                 "extract_resid_out": True,
+                "extract_resid_in": False,
+                "extract_resid_mid": False,
+                "extract_attn_in": False,
+                "extract_attn_out": False,
+                "extract_values": False,
+                "extract_head_out": False,
+                "extract_avg_attn_pattern": False,
+                "extract_avg_values_vectors_projected": False,
+                "extract_values_vectors_projected": False,
+                "extract_avg": False,
+                "ablation_queries": None,
+                "patching_queries": None,
+                "external_cache": None,
+                "attn_heads": "all",
+                "batch_idx": None,
+                "move_to_cpu": False,
             }
 
             if "resid_in" in activ_type:
@@ -1026,8 +1012,8 @@ class HookedModel:
 
                 # compute the logit difference
                 result_diff = logit_diff(
-                    base_label_tokens=[s[1] for s in base_targets],
-                    target_label_tokens=[c[1] for c in target_targets],
+                    base_label_tokens=[s for s in base_targets],
+                    target_label_tokens=[c for c in target_targets],
                     target_clean_logits=target_clean_cache["logits"],
                     target_patched_logits=target_patched_cache["logits"],
                 )

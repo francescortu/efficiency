@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "efficiency"
+name = "easyroutine"
 version = "0.1.0"
 description = ""
 authors = ["Francesc0rtu <francescortu@live.it>"]

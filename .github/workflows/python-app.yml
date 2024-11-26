@@ -2,9 +2,9 @@ name: Python Test Workflow
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, multilingual ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, multilingual ]
 
 jobs:
   test:

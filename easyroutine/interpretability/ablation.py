@@ -4,12 +4,12 @@ import pandas as pd
 from enum import Enum
 import torch
 from functools import partial
-from src.hooks import (
+from easyroutine.interpretability.hooks import (
     ablate_attn_mat_hook,
     ablate_heads_hook,
     ablate_tokens_hook_flash_attn
 )
-from src.utils import preprocess_ablation_queries
+from easyroutine.interpretability.utils import preprocess_ablation_queries
 
 # The current version of AbaltionManager doesn't allow to ablate different kind of tokens in the same layer
 

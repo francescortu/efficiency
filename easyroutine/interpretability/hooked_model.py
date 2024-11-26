@@ -15,19 +15,19 @@ from typing import (
     Any,
 )
 
-from interpretability.models import ModelFactory, TokenizerFactory, TokenIndex
-
+from easyroutine.interpretability.models import ModelFactory, TokenizerFactory, TokenIndex
+from easyroutine.interpretability.utils import get_attribute_by_name
 import numpy as np
 from easyroutine.logger import Logger, LambdaLogger
 from tqdm import tqdm
 from dataclasses import dataclass, field
 import os
-from interpretability.ablation import AblationManager
+from easyroutine.interpretability.ablation import AblationManager
 import random
 import json
 
 # from src.model.emu3.
-from interpretability.utils import (
+from easyroutine.interpretability.utils import (
     left_pad,
     aggregate_cache_efficient,
     aggregate_metrics,
@@ -39,7 +39,7 @@ from interpretability.utils import (
     resize_img_with_padding,
     kl_divergence_diff,
 )
-from interpretability.hooks import (
+from easyroutine.interpretability.hooks import (
     partial,
     embed_hook,
     save_resid_hook,
@@ -52,7 +52,6 @@ from interpretability.hooks import (
     get_module_by_path,
 )
 from functools import partial
-from line_profiler import profile
 from random import randint
 import pandas as pd
 from copy import deepcopy
@@ -131,10 +130,26 @@ class HookedModel:
         self.assert_all_modules_exist()
 
     def assert_module_exists(self, component: str):
-        if not hasattr(self.hf_model, component):
-            raise ValueError(
-                f"Component {component} does not exist in the model. Please check the model configuration"
-            )
+        # Remove '.input' or '.output' from the component
+        component = component.replace('.input', '').replace('.output', '')
+        
+        # Check if '{}' is in the component, indicating layer indexing
+        if '{}' in component:
+            for i in range(0, self.model_config.num_hidden_layers):
+                attr_name = component.format(i)
+                try:
+                    get_attribute_by_name(self.hf_model, attr_name)
+                except AttributeError:
+                    raise ValueError(
+                        f"Component '{attr_name}' does not exist in the model. Please check the model configuration."
+                    )
+        else:
+            try:
+                get_attribute_by_name(self.hf_model, component)
+            except AttributeError:
+                raise ValueError(
+                    f"Component '{component}' does not exist in the model. Please check the model configuration."
+                )
 
     def assert_all_modules_exist(self):
         # get the list of all attributes of model_config
@@ -194,6 +209,7 @@ class HookedModel:
             str
         ],
         string_tokens: List[str],
+        split_positions: Optional[List[int]] = None,
         attn_heads: Union[list[dict], Literal["all"]] = "all",
         extract_attn_pattern: bool = False,
         extract_attn_out: bool = False,
@@ -269,7 +285,7 @@ class HookedModel:
 
         # process the token where we want the activation from
 
-        token_index = TokenIndex(self.config.model_name).get_token_index(
+        token_index = TokenIndex(self.config.model_name, split_positions=split_positions).get_token_index(
             tokens=extracted_token_position, string_tokens=string_tokens
         )
 
@@ -408,7 +424,7 @@ class HookedModel:
         if patching_queries:
             token_to_pos = partial(
                 map_token_to_pos,
-                _get_token_index=TokenIndex(self.config.model_name).get_token_index,
+                _get_token_index=TokenIndex(self.config.model_name, split_positions=split_positions).get_token_index,
                 string_tokens=string_tokens,
                 hf_tokenizer=self.hf_tokenizer,
                 inputs=inputs,
@@ -485,7 +501,7 @@ class HookedModel:
             # TODO: debug and test the ablation. Check with ale
             token_to_pos = partial(
                 map_token_to_pos,
-                _get_token_index=TokenIndex(self.config.model_name).get_token_index,
+                _get_token_index=TokenIndex(self.config.model_name, split_positions=split_positions).get_token_index,
                 string_tokens=string_tokens,
                 hf_tokenizer=self.hf_tokenizer,
                 inputs=inputs,
@@ -610,6 +626,7 @@ class HookedModel:
         extracted_token_position: List[
             str
         ],
+        split_positions: Optional[List[int]] = None,
         extract_resid_in: bool = False,
         extract_resid_mid: bool = False,
         extract_resid_out: bool = False,
@@ -634,9 +651,11 @@ class HookedModel:
         cache = {}
         string_tokens = self.to_string_tokens(inputs["input_ids"].squeeze())
 
+    
         hooks = self.create_hooks(  # TODO: add **kwargs
             inputs=inputs,
             extracted_token_position=extracted_token_position,
+            split_positions=split_positions,
             cache=cache,
             string_tokens=string_tokens,
             attn_heads=attn_heads,
@@ -687,7 +706,7 @@ class HookedModel:
                 for key, value in external_cache.items():
                     external_cache[key] = value.detach().cpu()
 
-        token_dict = TokenIndex(self.config.model_name).get_token_index(
+        token_dict = TokenIndex(self.config.model_name, split_positions=split_positions).get_token_index(
             tokens=extracted_token_position,
             string_tokens=string_tokens,
             return_type="dict",
@@ -715,7 +734,7 @@ class HookedModel:
 
         return cache
 
-    def __call__(self, *args: profile, **kwds: profile) -> profile:
+    def __call__(self, *args, **kwds):
         return self.forward(*args, **kwds)
 
     def get_module_from_string(self, component: str):
@@ -824,10 +843,11 @@ class HookedModel:
             # log_memory_usage("Extract cache - Before batch")
             tokens, others = batch
             inputs = {k: v.to(self.first_device) for k, v in tokens.items()}
-            # log_memory_usage("Extract cache - Before extractor_routine")
+
             cache = self.forward(
                 inputs,
                 extracted_token_position=extracted_token_position,
+                split_positions=batch.get("split_positions", None),
                 external_cache=attn_pattern,
                 batch_idx=n_batches,
                 **kwargs,
@@ -959,6 +979,7 @@ class HookedModel:
             base_cache = self.forward(
                 inputs=inputs,
                 extracted_token_position=extracted_token_position,
+                split_positions=base_batch.get("split_positions", None),
                 **args,
             )
 
@@ -985,6 +1006,7 @@ class HookedModel:
             target_clean_cache = self.forward(
                 target_inputs,
                 extracted_token_position=requested_position_to_extract,
+                split_positions=target_batch.get("split_positions", None),
                 extract_resid_out=False,
                 # move_to_cpu=True,
             )
@@ -996,6 +1018,7 @@ class HookedModel:
                 extracted_token_position=list(
                     set(extracted_token_position + requested_position_to_extract)
                 ),
+                split_positions=target_batch.get("split_positions", None),
                 patching_queries=patching_query,
                 **kwargs,
             )
@@ -1058,3 +1081,5 @@ class HookedModel:
 
         self.logger.info("Aggregation finished", std_out=True)
         return final_cache
+
+

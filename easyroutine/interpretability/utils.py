@@ -13,6 +13,22 @@ from pathlib import Path
 from PIL import Image, ImageOps
 import torch.nn.functional as F
 
+def get_attribute_by_name(obj, attr_name):
+    """Get attribute from obj recursively, given a dot-separated attr_name."""
+    try:
+        attrs = attr_name.split('.')
+        for attr in attrs:
+            if '[' in attr and ']' in attr:
+                # Handle list or dict indexing
+                attr_name, index = attr[:-1].split('[')
+                obj = getattr(obj, attr_name)
+                index = int(index)
+                obj = obj[index]
+            else:
+                obj = getattr(obj, attr)
+        return obj
+    except (AttributeError, IndexError, ValueError, TypeError):
+        raise AttributeError(f"Attribute {attr_name} does not exist.")
 
 def data_path(path: str):
     """

@@ -1,1 +1,1 @@
-from hooked_model import HookedModel
+from .hooked_model import HookedModel

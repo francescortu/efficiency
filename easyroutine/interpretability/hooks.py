@@ -3,9 +3,8 @@ from copy import deepcopy
 import pandas as pd
 from typing import List, Callable, Union
 from einops import rearrange, einsum
-from src.utils import repeat_kv
+from easyroutine.interpretability.utils import repeat_kv
 from functools import partial
-from line_profiler import profile
 import re
 import torch.nn as nn
 
@@ -69,7 +68,7 @@ def save_resid_hook(module, input, output,  cache, cache_key, token_index,  ):
         if isinstance(output, tuple):
             b = output[0]
         else:
-            b = output[0]
+            b = output
         
     cache[cache_key] = b.data.detach().clone()[..., token_index, :]
       # slice the tensor to get the activations of the token we want to extract

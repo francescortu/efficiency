@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 import os
-from typing import Tuple, Union
+from typing import Tuple, Union, Dict
 import pandas as pd
 import torch
 from rich import print
@@ -12,6 +12,7 @@ from typing import Callable, Literal
 from pathlib import Path
 from PIL import Image, ImageOps
 import torch.nn.functional as F
+
 
 def get_attribute_by_name(obj, attr_name):
     """Get attribute from obj recursively, given a dot-separated attr_name."""
@@ -453,8 +454,8 @@ def reshape_tensors(
 # get the position of the tokens alias
 def map_token_to_pos(
     token: str,
-    _get_token_index: Callable,
-    string_tokens: list,
+    _get_token_index: Dict,
+    # string_tokens: list,
     hf_tokenizer,
     inputs: dict,
 ) -> int:
@@ -463,7 +464,8 @@ def map_token_to_pos(
     Token that starts with '@' are considered as aliases and the function will return the position of the alias in the input_ids.
     """
     if token.startswith("@"):
-        return _get_token_index([token[1:]], string_tokens)
+        # return _get_token_index([token[1:]], string_tokens)
+        return _get_token_index[token[1:]]
     else:
         token_id = hf_tokenizer(token, return_tensors="pt")
         assert (

@@ -6,11 +6,27 @@ from transformers import (
     LlavaForConditionalGeneration,
     PixtralProcessor,
     LlamaForCausalLM,
-    LlamaTokenizer
+    LlamaTokenizer,
+    T5ForConditionalGeneration,
+    T5TokenizerFast,
+    LlamaTokenizerFast,
 )
 import random
 from typing import List, Literal, Union, Dict, Optional
 import torch
+
+SUPPORTED_MODELS = {
+    "mistral-community/pixtral-12b": ("[IMG]", "[BREAK]", "[IMG_END]"),
+    "Emu3-Chat": ("<|image start|>", None, "<|image end|>"),
+    "Emu3-Gen": ("<|image start|>", None, "<|image end|>"),
+    "Emu3-Stage1": ("<|image start|>", None, "<|image end|>"),
+    "facebook/chameleon-7b": ("<racm3:break>", None, "<eoss>"),
+    "facebook/chameleon-30b": ("<racm3:break>", None, "<eoss>"),
+    "hf-internal-testing/tiny-random-LlamaForCausalLM": (None, None, None),
+    "CohereForAI/aya-101": (None, None, None),
+    "meta-llama/Llama-3.2-1B": (None, None, None),
+    "meta-llama/Llama-3.2-3B": (None, None, None),
+}
 
 
 @dataclass
@@ -63,13 +79,26 @@ class ModelFactory:
                 "Using an attention type different from eager could have unexpected beheviour in some experiment!",
                 "WARNING",
             )
-        if model_name in ["facebook/chameleon-7b", "facebook/chameleon-30b"]:
-            model = ChameleonForConditionalGeneration.from_pretrained(
-                model_name,
-                torch_dtype=torch_dtype,
-                device_map=device_map,
-                attn_implementation=attn_implementation,
-            )
+        if model_name in [
+            "facebook/chameleon-7b",
+            "facebook/chameleon-30b",
+            "meta-llama/Llama-3.2-1B",
+            "meta-llama/Llama-3.2-3B",
+        ]:
+            if model_name in ["meta-llama/Llama-3.2-1B", "meta-llama/Llama-3.2-3B"]:
+                model = LlamaForCausalLM.from_pretrained(
+                    model_name,
+                    torch_dtype=torch_dtype,
+                    device_map=device_map,
+                    attn_implementation=attn_implementation,
+                )
+            elif model_name in ["facebook/chameleon-7b", "facebook/chameleon-30b"]:
+                model = ChameleonForConditionalGeneration.from_pretrained(
+                    model_name,
+                    torch_dtype=torch_dtype,
+                    device_map=device_map,
+                    attn_implementation=attn_implementation,
+                )
             model_config = ModelConfig(
                 residual_stream_input_hook_name="model.layers[{}].input",
                 residual_stream_hook_name="model.layers[{}].output",
@@ -143,7 +172,7 @@ class ModelFactory:
             model = LlamaForCausalLM.from_pretrained(
                 model_name, torch_dtype=torch_dtype, device_map=device_map
             )
-            
+
             model_config = ModelConfig(
                 residual_stream_input_hook_name="model.layers[{}].input",
                 residual_stream_hook_name="model.layers[{}].output",
@@ -163,7 +192,28 @@ class ModelFactory:
                 // model.config.num_key_value_heads,
                 head_dim=model.config.hidden_size // model.config.num_attention_heads,
             )
-
+        elif model_name in ["CohereForAI/aya-101"]:
+            model = T5ForConditionalGeneration.from_pretrained(
+                model_name, torch_dtype=torch_dtype, device_map=device_map
+            )
+            model_config = ModelConfig(
+                residual_stream_input_hook_name="encoder.block[{}].input",
+                residual_stream_hook_name="encoder.block[{}].output",
+                intermediate_stream_hook_name="encoder.block[{}].layer[1].input",
+                attn_value_hook_name="encoder.block[{}].layer[0].SelfAttention.v.output",
+                attn_out_hook_name="encoder.block[{}].layer[0].SelfAttention.o.output",
+                attn_in_hook_name="encoder.block[{}].layer[0].SelfAttention.input",
+                attn_matrix_hook_name="encoder.block[{}].layer[0].SelfAttention.attention_matrix_hook.output",
+                attn_out_proj_weight="encoder.block[{}].layer[0].SelfAttention.o.weight",
+                attn_out_proj_bias="encoder.block[{}].layer[0].SelfAttention.o.bias",
+                embed_tokens="encoder.embed_tokens",
+                num_hidden_layers=model.config.num_layers,
+                num_attention_heads=model.config.num_heads,
+                hidden_size=model.config.d_model,
+                num_key_value_heads=model.config.num_heads,
+                num_key_value_groups=model.config.num_heads,
+                head_dim=model.config.d_model // model.config.num_heads,
+            )
         else:
             raise ValueError("Unsupported model_name")
 
@@ -180,6 +230,13 @@ class TokenizerFactory:
                 device_map=device_map,
             )
             is_a_processor = True
+        elif model_name in ["meta-llama/Llama-3.2-1B", "meta-llama/Llama-3.2-3B"]:
+            processor = LlamaTokenizerFast.from_pretrained(
+                model_name,
+                torch_dtype=torch_dtype,
+                device_map=device_map,
+            )
+            is_a_processor = False
         elif model_name in ["mistral-community/pixtral-12b"]:
             processor = PixtralProcessor.from_pretrained(
                 model_name,
@@ -196,21 +253,19 @@ class TokenizerFactory:
                 device_map=device_map,
             )
             is_a_processor = False
+        elif model_name in ["CohereForAI/aya-101"]:
+            processor = T5TokenizerFast.from_pretrained(
+                model_name,
+                torch_dtype=torch_dtype,
+                device_map=device_map,
+            )
+            is_a_processor = False
+
         else:
             raise ValueError("Unsupported model_name")
 
         return processor, is_a_processor
 
-
-SUPPORTED_MODELS = {
-    "mistral-community/pixtral-12b": ("[IMG]", "[BREAK]", "[IMG_END]"),
-    "Emu3-Chat": ("<|image start|>", None, "<|image end|>"),
-    "Emu3-Gen": ("<|image start|>", None, "<|image end|>"),
-    "Emu3-Stage1": ("<|image start|>", None, "<|image end|>"),
-    "facebook/chameleon-7b": ("<racm3:break>", None, "<eoss>"),
-    "facebook/chameleon-30b": ("<racm3:break>", None, "<eoss>"),
-    "hf-internal-testing/tiny-random-LlamaForCausalLM": (None, None, None)
-}
 
 SUPPORTED_TOKENS = [
     "last",
@@ -228,220 +283,50 @@ SUPPORTED_TOKENS = [
 ]
 
 
-class TokenIndex:
-    def __init__(
-        self,
-        model_name: str,
-        split_positions: Optional[List[int]] = None,
-        split_tokens: Optional[List[str]] = None,
-    ):
+class InputHandler:
+    def __init__(self, model_name: str):
         self.model_name = model_name
-        self.split_tokens = split_tokens
-        self.split_positions = sorted(split_positions) if split_positions else []
 
-    def find_occurrences(self, lst: List[str], target: str) -> List[int]:
-        return [i for i, x in enumerate(lst) if x == target]
-
-    def categorize_tokens(self, string_tokens: List[str]) -> Dict[str, List[int]]:
-        if self.model_name not in SUPPORTED_MODELS:
-            raise ValueError("Unsupported model_name")
-
-        start_image_token, special, end_image_token = SUPPORTED_MODELS[self.model_name]
-
-        image_start_tokens, image_end_tokens, image_tokens, last_line_image_tokens = (
-            [],
-            [],
-            [],
-            [],
-        )
-        text_tokens, special_tokens = [], []
-
-        in_image_sequence = False
-
-        for i, token in enumerate(string_tokens):
-            if token == start_image_token and not in_image_sequence:
-                in_image_sequence = True
-                image_start_tokens.append(i)
-            elif in_image_sequence and token == end_image_token:
-                in_image_sequence = False
-                image_end_tokens.append(i)
-                last_line_image_tokens.append(i - 1)
-            elif in_image_sequence and special and token == special:
-                special_tokens.append(i)
-            elif in_image_sequence:
-                image_tokens.append(i)
-            else:
-                text_tokens.append(i)
-
-        tokens_group, positions_group = self.group_tokens(string_tokens)
-
-        position_dict = {
-            f"position-group-{i}": positions_group[i] for i in positions_group
-        }
-
-        return {
-            "image_start": image_start_tokens,
-            "image_end": image_end_tokens,
-            "image": image_tokens,
-            "last_line_image": last_line_image_tokens,
-            "text": text_tokens,
-            "special": special_tokens,
-            **position_dict,
-        }
-
-    def group_tokens(
-        self, string_tokens: List[str]
-    ) -> (Dict[int, List[str]], Dict[int, List[int]]):
-        if self.split_tokens:
-            return self.group_tokens_by_split_tokens(string_tokens)
-        elif self.split_positions:
-            return self.group_tokens_by_positions(string_tokens)
-        else:
-            return {0: string_tokens}, {0: list(range(len(string_tokens)))}
-
-    def group_tokens_by_positions(
-        self, string_tokens: List[str]
-    ) -> (Dict[int, List[str]], Dict[int, List[int]]):
-        tokens_group, positions_group = {}, {}
-        for i, pos in enumerate(self.split_positions):
-            if i == 0:
-                positions_group[i] = [0, pos]
-            else:
-                positions_group[i] = [self.split_positions[i - 1], pos]
-        positions_group[len(self.split_positions)] = [
-            self.split_positions[-1],
-            len(string_tokens),
-        ]
-        
-        # modify the positions_group to include all the indexes and not just the start and end
-        for i in range(len(positions_group)):
-            positions_group[i] = list(range(positions_group[i][0], positions_group[i][1]))
-            
-
-        for i, group in positions_group.items():
-            tokens_group[i] = string_tokens[group[0] : group[1]]
-
-        return tokens_group, positions_group
-
-    def group_tokens_by_split_tokens(
-        self, string_tokens: List[str]
-    ) -> (Dict[int, List[str]], Dict[int, List[int]]):
-        tokens_group, positions_group = {}, {}
-        current_group = 0
-        start_pos = 0
-
-        for i, token in enumerate(string_tokens):
-            if token in self.split_tokens:
-                positions_group[current_group] = [start_pos, i]
-                tokens_group[current_group] = string_tokens[start_pos:i]
-                current_group += 1
-                start_pos = i + 1
-
-        positions_group[current_group] = [start_pos, len(string_tokens)]
-        tokens_group[current_group] = string_tokens[start_pos:]
-
-        return tokens_group, positions_group
-
-    def get_token_index(
+    def prepare_inputs(
         self,
-        tokens: List[str],
-        string_tokens: List[str],
-        return_type: Literal["list", "int", "dict"] = "list",
-    ) -> Union[List[int], int, Dict]:
-        if not all(
-            token in SUPPORTED_TOKENS
-            or token.startswith("position-group-")
-            or token.startswith("random-position-group-")
-            for token in tokens
-        ):
-            raise ValueError(
-                f"Unsupported token type: {tokens}. Supported tokens are: {SUPPORTED_TOKENS} and position-group-0, position-group-1, etc or random-position-group-0, random-position-group-1, etc"
-            )
-
-        # Check if split_positions is required but not provided
-        if self.split_positions is None and any(
-            token.startswith("position-group-")
-            or token.startswith("random-position-group-")
-            for token in tokens
-        ):
-            raise ValueError(
-                "split_positions cannot be None when a group position token is requested"
-            )
-
-        token_indexes = self.categorize_tokens(string_tokens)
-        tokens_positions = self.get_tokens_positions(tokens, token_indexes)
-
-        if return_type == "int":
-            if len(tokens_positions) > 1:
-                raise ValueError(
-                    "More than one token requested: return_type should be list, got int"
-                )
-            return tokens_positions[0]
-        if return_type == "dict":
-            return self.get_token_dict(token_indexes)
-        return tokens_positions
-
-    def get_tokens_positions(
-        self, tokens: List[str], token_indexes: Dict[str, List[int]]
-    ) -> List[int]:
-        tokens_positions = []
-        position_dict = {
-            k: v for k, v in token_indexes.items() if k.startswith("position-group-")
-        }
-        random_position_dict = {
-            f"random-{k}": random.sample(v, 1) for k, v in position_dict.items()
-        }
-
-        for token in tokens:
-            if token.startswith("random-position-group-"):
-                group, n = self.parse_random_group_token(token)
-                random_position_dict[token] = random.sample(
-                    position_dict[f"position-group-{group}"], int(n)
-                )
-            elif token.startswith("random-image"):
-                n = token.split("-")[-1]
-                random_position_dict[token] = random.sample(
-                    token_indexes["image"], int(n) if n else 1
-                )
-
-        token_dict = self.get_token_dict(token_indexes, random_position_dict)
-
-        for token in tokens:
-            tokens_positions.extend(token_dict[token])
-
-        return tokens_positions
-
-    def parse_random_group_token(self, token: str) -> (str, int):
-        group_and_n = token.split("-")[2:]
-        if len(group_and_n) > 1:
-            group, n = group_and_n
+        batch_dict: Dict[str, torch.Tensor],
+        device: Union[str, torch.device],
+    ):
+        if self.model_name in [
+            "facebook/chameleon-7b",
+            "facebook/chameleon-30b",
+            "mistral-community/pixtral-12b",
+        ]:
+            input_dict = {
+                "input_ids": batch_dict["input_ids"],
+                "attention_mask": batch_dict["attention_mask"],
+                "pixel_values": batch_dict["pixel_values"],
+            }
+        elif self.model_name in ["meta-llama/Llama-3.2-1B", "meta-llama/Llama-3.2-3B"]:
+            input_dict = {
+                "input_ids": batch_dict["input_ids"],
+                "attention_mask": batch_dict["attention_mask"],
+            }
+        elif self.model_name in ["Emu3-Chat", "Emu3-Gen", "Emu3-Stage1"]:
+            raise NotImplementedError("Emu3 model not implemented yet")
+        elif self.model_name in ["hf-internal-testing/tiny-random-LlamaForCausalLM"]:
+            input_dict = {
+                "input_ids": batch_dict["input_ids"],
+                "attention_mask": batch_dict["attention_mask"],
+            }
+        elif self.model_name in ["CohereForAI/aya-101"]:
+            input_dict = {
+                "input_ids": batch_dict["input_ids"],
+                "decoder_input_ids": batch_dict["input_ids"],
+                "attention_mask": batch_dict["attention_mask"],
+            }
         else:
-            group = group_and_n[0]
-            n = 1
-        return group, int(n)
+            raise ValueError(f"Unsupported model_name: {self.model_name}")
+        input_dict = {k: v.to(device) for k, v in input_dict.items()}
+        return input_dict
 
-    def get_token_dict(
+    def get_input_ids(
         self,
-        token_indexes: Dict[str, List[int]],
-        random_position_dict: Dict[str, List[int]] = {},
-    ) -> Dict[str, List[int]]:
-        return {
-            "last": [-1],
-            "last-2": [-2],
-            "last-4": [-4],
-            "last-image": token_indexes["last_line_image"],
-            "end-image": token_indexes["image_end"],
-            "all-text": token_indexes["text"],
-            "all": list(range(len(token_indexes["text"]))),
-            "all-image": token_indexes["image"],
-            "special": token_indexes["special"],
-            "random-text": None if len(token_indexes["text"])==0 else [random.choice(token_indexes["text"])],
-            "random-image": None if len(token_indexes["image"])==0 else [random.choice(token_indexes["image"])],
-            "special-pixtral": [1052, 1051, 1038, 991, 1037, 1047],
-            **{
-                k: v
-                for k, v in token_indexes.items()
-                if k.startswith("position-group-")
-            },
-            **random_position_dict,
-        }
+        input_dict: Dict[str, torch.Tensor],
+    ):
+        return input_dict["input_ids"]

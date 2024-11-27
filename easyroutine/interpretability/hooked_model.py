@@ -15,7 +15,12 @@ from typing import (
     Any,
 )
 
-from easyroutine.interpretability.models import ModelFactory, TokenizerFactory, TokenIndex
+from easyroutine.interpretability.models import (
+    ModelFactory,
+    TokenizerFactory,
+    InputHandler,
+)
+from easyroutine.interpretability.token_index import TokenIndex
 from easyroutine.interpretability.utils import get_attribute_by_name
 import numpy as np
 from easyroutine.logger import Logger, LambdaLogger
@@ -56,7 +61,6 @@ from random import randint
 import pandas as pd
 from copy import deepcopy
 from pathlib import Path
-
 
 
 LambdaLogger.log(
@@ -102,9 +106,10 @@ class HookedModel:
             torch_dtype=config.torch_dtype,
             device_map=config.device_map,
         )
+        self.input_handler = InputHandler(model_name=config.model_name)
         if processor is True:
             self.processor = tokenizer
-            self.text_tokenizer = self.processor.tokenizer # type: ignore
+            self.text_tokenizer = self.processor.tokenizer  # type: ignore
             self.hf_tokenizer = self.processor
         else:
             self.processor = None
@@ -128,13 +133,22 @@ class HookedModel:
         }
         self.additional_hooks = []
         self.assert_all_modules_exist()
+        
+    def __repr__(self):
+        return f"""HookedModel(model_name={self.config.model_name}):
+        {self.hf_model.__repr__()}
+    """
+
+    @classmethod
+    def from_pretrained(cls, model_name: str, **kwargs):
+        return cls(HookedModelConfig(model_name=model_name, **kwargs))
 
     def assert_module_exists(self, component: str):
         # Remove '.input' or '.output' from the component
-        component = component.replace('.input', '').replace('.output', '')
-        
+        component = component.replace(".input", "").replace(".output", "")
+
         # Check if '{}' is in the component, indicating layer indexing
-        if '{}' in component:
+        if "{}" in component:
             for i in range(0, self.model_config.num_hidden_layers):
                 attr_name = component.format(i)
                 try:
@@ -169,7 +183,7 @@ class HookedModel:
         If the tokenizer is a processor, return just the tokenizer. If the tokenizer is a tokenizer, return the tokenizer
         """
         if self.processor is not None:
-            return self.processor.tokenizer # type: ignore
+            return self.processor.tokenizer  # type: ignore
         return self.hf_tokenizer
 
     def get_processor(self):
@@ -180,15 +194,14 @@ class HookedModel:
 
     def device(self):
         return self.first_device
-    
-    def register_forward_hook(self, component:str, hook_function: Callable):
+
+    def register_forward_hook(self, component: str, hook_function: Callable):
         self.additional_hooks.append(
             {
                 "component": component,
                 "intervention": hook_function,
             }
         )
-        
 
     def to_string_tokens(
         self,
@@ -198,18 +211,16 @@ class HookedModel:
             tokens = tokens.tolist()
         string_tokens = []
         for tok in tokens:
-            string_tokens.append(self.hf_tokenizer.decode(tok)) # type: ignore
+            string_tokens.append(self.hf_tokenizer.decode(tok))  # type: ignore
         return string_tokens
 
     def create_hooks(
         self,
         inputs,
         cache: Dict[str, torch.Tensor],
-        extracted_token_position: List[
-            str
-        ],
-        string_tokens: List[str],
-        split_positions: Optional[List[int]] = None,
+        token_index: List,
+        token_dict: Dict,
+        # string_tokens: List[str],
         attn_heads: Union[list[dict], Literal["all"]] = "all",
         extract_attn_pattern: bool = False,
         extract_attn_out: bool = False,
@@ -217,7 +228,7 @@ class HookedModel:
         extract_avg_attn_pattern: bool = False,
         extract_avg_values_vectors_projected: bool = False,
         extract_resid_in: bool = False,
-        extract_resid_out: bool = False,  # TODO: change to False (fix cascade)
+        extract_resid_out: bool = False,
         extract_values: bool = False,
         extract_resid_mid: bool = False,
         save_input_ids: bool = False,
@@ -273,21 +284,11 @@ class HookedModel:
                     "attn_heads must be a list of dictionaries with the layer and head to extract the attention pattern or 'all' to extract all the heads of all the layers"
                 )
 
-        # add check for batch size > 1
-        if (
-            inputs["input_ids"].shape[0] > 1
-        ):  # NICE-TO-HAVE: add support for batch size > 1
-            raise ValueError("Batch size > 1 is not supported for Pixtral model")
-
-        string_tokens = to_string_tokens(
-            inputs["input_ids"].squeeze(), self.hf_tokenizer
-        )
-
         # process the token where we want the activation from
 
-        token_index = TokenIndex(self.config.model_name, split_positions=split_positions).get_token_index(
-            tokens=extracted_token_position, string_tokens=string_tokens
-        )
+        # token_index, token_dict = TokenIndex(
+        #     self.config.model_name, split_positions=split_positions
+        # ).get_token_index(tokens=extracted_token_position, string_tokens=string_tokens)
 
         # define a dynamic factory hook. It takes a function and the corresponding kwargs and returns a function that pyvene can use. This is necessary to use partial() in the hook function
         # but still be consistent with the type of the function that pyvene expects. It's basically a custom partial function that retuns a function of type FuncType
@@ -424,8 +425,8 @@ class HookedModel:
         if patching_queries:
             token_to_pos = partial(
                 map_token_to_pos,
-                _get_token_index=TokenIndex(self.config.model_name, split_positions=split_positions).get_token_index,
-                string_tokens=string_tokens,
+                _get_token_index=token_dict,
+                # string_tokens=string_tokens,
                 hf_tokenizer=self.hf_tokenizer,
                 inputs=inputs,
             )
@@ -501,8 +502,8 @@ class HookedModel:
             # TODO: debug and test the ablation. Check with ale
             token_to_pos = partial(
                 map_token_to_pos,
-                _get_token_index=TokenIndex(self.config.model_name, split_positions=split_positions).get_token_index,
-                string_tokens=string_tokens,
+                _get_token_index=token_dict,
+                # string_tokens=string_tokens,
                 hf_tokenizer=self.hf_tokenizer,
                 inputs=inputs,
             )
@@ -614,18 +615,17 @@ class HookedModel:
                     }
                     for el in attn_heads
                 ]
-                
+
             # if additional hooks are not empty, add them to the hooks list
         if self.additional_hooks:
             hooks += self.additional_hooks
         return hooks
 
+    @torch.no_grad()
     def forward(
         self,
         inputs,
-        extracted_token_position: List[
-            str
-        ],
+        extracted_token_position: List[str],
         split_positions: Optional[List[int]] = None,
         extract_resid_in: bool = False,
         extract_resid_mid: bool = False,
@@ -649,15 +649,18 @@ class HookedModel:
     ):
         """ """
         cache = {}
-        string_tokens = self.to_string_tokens(inputs["input_ids"].squeeze())
+        string_tokens = self.to_string_tokens(
+            self.input_handler.get_input_ids(inputs).squeeze()
+        )
+        token_index, token_dict = TokenIndex(
+            self.config.model_name, split_positions=split_positions
+        ).get_token_index(tokens=extracted_token_position, string_tokens=string_tokens, return_type="all")
 
-    
         hooks = self.create_hooks(  # TODO: add **kwargs
             inputs=inputs,
-            extracted_token_position=extracted_token_position,
-            split_positions=split_positions,
+            token_dict=token_dict,
+            token_index=token_index,
             cache=cache,
-            string_tokens=string_tokens,
             attn_heads=attn_heads,
             extract_attn_pattern=extract_attn_pattern,
             extract_attn_out=extract_attn_out,
@@ -706,11 +709,6 @@ class HookedModel:
                 for key, value in external_cache.items():
                     external_cache[key] = value.detach().cpu()
 
-        token_dict = TokenIndex(self.config.model_name, split_positions=split_positions).get_token_index(
-            tokens=extracted_token_position,
-            string_tokens=string_tokens,
-            return_type="dict",
-        )
         mapping_index = {}
         current_index = 0
         for token in extracted_token_position:
@@ -792,22 +790,27 @@ class HookedModel:
             - output: dictionary with the output of the model
         """
         # Initialize cache for logits
-        hooks = self.create_hooks(
-            inputs=inputs,
-            cache={},
-            string_tokens=to_string_tokens(
-                inputs["input_ids"].squeeze(), self.hf_tokenizer
-            ),
-            extract_resid_out=False,
-            **kwargs,
-        )
-        hook_handlers = self.set_hooks(hooks)
+        # TODO FIX THIS. IT is not general and it is not working
+        raise NotImplementedError("This method is not working. It needs to be fixed")
+        # hooks = self.create_hooks(
+        #     inputs=inputs,
+        #     token_dict={},
+        #     token_index=[],
+        #     cache={},
+        #     string_tokens=to_string_tokens(
+        #         inputs["input_ids"].squeeze(), self.hf_tokenizer
+        #     ),
+        #     extract_resid_out=False,
+        #     **kwargs,
+        # )
+        # hook_handlers = self.set_hooks(hooks)
 
-        output = self.hf_model.generate(
-            **inputs, generation_config=generation_config, output_scores=False
-        )
-        self.remove_hooks(hook_handlers)
-        return output["sequences"] # type: ignore
+        # output = self.hf_model.generate(
+        #     **inputs, generation_config=generation_config, output_scores=False
+        # )
+        # self.remove_hooks(hook_handlers)
+        # print(output)
+        # return output["sequences"] # type: ignore
 
     @torch.no_grad()
     def extract_cache(
@@ -816,6 +819,7 @@ class HookedModel:
         extracted_token_position: List[str],
         batch_saver: Callable = lambda x: None,
         move_to_cpu_after_forward: bool = True,
+        # save_other_batch_elements: bool = False,
         **kwargs,
     ):
         """
@@ -839,10 +843,15 @@ class HookedModel:
         example_dict = {}
         n_batches = 0  # Initialize batch counter
 
-        for batch in tqdm(dataloader, desc="Extracting cache:"):
+        for batch in tqdm(dataloader, total=len(dataloader), desc="Extracting cache:"):
             # log_memory_usage("Extract cache - Before batch")
-            tokens, others = batch
-            inputs = {k: v.to(self.first_device) for k, v in tokens.items()}
+            # tokens, others = batch
+            # inputs = {k: v.to(self.first_device) for k, v in tokens.items()}
+
+            # get input_ids, attention_mask, and if available, pixel_values from batch (that is a dictionary)
+            # then move them to the first device
+            inputs = self.input_handler.prepare_inputs(batch, self.first_device)
+            others = {k: v for k, v in batch.items() if k not in inputs}
 
             cache = self.forward(
                 inputs,
@@ -936,7 +945,7 @@ class HookedModel:
             total=len(base_dataloader),
         ):
             torch.cuda.empty_cache()
-            inputs = {k: v.to(self.first_device) for k, v in base_batch.items()}
+            inputs = self.input_handler.prepare_inputs(base_batch, self.first_device)
 
             # set the right arguments for extract the patching activations
             activ_type = [query["activation_type"][:-3] for query in patching_query]
@@ -984,9 +993,9 @@ class HookedModel:
             )
 
             # extract the target activations
-            target_inputs = {
-                k: v.to(self.first_device) for k, v in target_batch.items()
-            }
+            target_inputs = self.input_handler.prepare_inputs(
+                target_batch, self.first_device
+            )
 
             requested_position_to_extract = []
             for query in patching_query:
@@ -1081,5 +1090,3 @@ class HookedModel:
 
         self.logger.info("Aggregation finished", std_out=True)
         return final_cache
-
-

@@ -111,6 +111,10 @@ class TestHookedModel(unittest.TestCase):
         self.assertIn("resid_mid_0", cache)
         self.assertEqual(cache["resid_mid_0"].shape, (1, 4, 16))
         
+    # TODO: Add test for all the extraction
+    # TODO: Add test for the ablation
+    # TODO: Add test for patching
+        
 
 
 if __name__ == "__main__":

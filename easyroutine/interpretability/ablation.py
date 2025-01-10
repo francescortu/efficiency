@@ -118,7 +118,7 @@ class AblationManager:
                 "intervention": partial(
                     config.hook_func,
                     ablation_queries=self._get_layer_specific_queries(
-                        ablation_queries, layer
+                        ablation_queries, int(layer)
                     ),
                     **kwargs,
                 ),

@@ -1,3 +1,4 @@
+# Description: This file contains the hooks used to extract the activations of the model
 import torch
 from copy import deepcopy
 import pandas as pd
@@ -9,6 +10,13 @@ import re
 import torch.nn as nn
 
 def parse_module_path(module_path):
+    r"""
+    Given a module path (str) in the form 'module.attr1[0].attr2[1]...', it returns a list of components
+    Args: 
+        module_path (str): the module path
+    Returns:
+        components (list): the components of the module path (torch modules)
+    """
     pattern = r'([^\.\[\]]+)(?:\[(\d+)\])?'
     components = []
     for attr, idx in re.findall(pattern, module_path):
@@ -19,6 +27,15 @@ def parse_module_path(module_path):
 
 # 2. Retrieving the module
 def get_module_by_path(model, module_path):
+    r"""
+    Given a model and a module path (str) in the form 'module.attr1[0].attr2[1]...', it returns the module
+    Args:
+        model (nn.Module): the model
+        module_path (str): the module path
+    Returns:
+        module (nn.Module): the module
+    """
+    
     components = parse_module_path(module_path)
     module = model
     for comp in components:
@@ -37,6 +54,10 @@ def get_module_by_path(model, module_path):
     return module
 
 def create_dynamic_hook(pyvene_hook: Callable, **kwargs):
+    r"""
+    DEPRECATED: pyvene is not used anymore.
+    This function is used to create a dynamic hook. It is a wrapper around the pyvene_hook function.
+    """
     partial_hook = partial(pyvene_hook, **kwargs)
 
     def wrap(*args, **kwargs):
@@ -46,17 +67,19 @@ def create_dynamic_hook(pyvene_hook: Callable, **kwargs):
 
 
 def embed_hook(module, input, output, cache, cache_key):
-    """
+    r"""
     Hook function to extract the embeddings of the tokens. It will save the embeddings in the cache (a global variable out the scope of the function)
     """
     if output is None:
         b = input[0]
+    else:
+        b = output
     cache[cache_key] = b.data.detach().clone()
     return b
 
 # Define a hook that saves the activations of the residual stream
 def save_resid_hook(module, input, output,  cache, cache_key, token_index,  ):
-    """
+    r"""
     It save the activations of the residual stream in the cache. It will save the activations in the cache (a global variable out the scope of the function)
     """
     if output is None:
@@ -70,13 +93,13 @@ def save_resid_hook(module, input, output,  cache, cache_key, token_index,  ):
         else:
             b = output
         
+    # slice the tensor to get the activations of the token we want to extract
     cache[cache_key] = b.data.detach().clone()[..., token_index, :]
-      # slice the tensor to get the activations of the token we want to extract
 
 
 
 def avg_hook(module, input, output,  cache, cache_key, last_image_idx, end_image_idx,  ):
-    """
+    r"""
     It save the activations of the residual stream in the cache. It will save the activations in the cache (a global variable out the scope of the function)
     """
     if output is None:
@@ -94,13 +117,15 @@ def avg_hook(module, input, output,  cache, cache_key, last_image_idx, end_image
     )
 
 def zero_ablation(tensor):
-    # Set the attention values to zero
+    r"""
+    Set the attention values to zero
+    """
     return torch.zeros_like(tensor)
 
         
 # b.copy_(attn_matrix)
 def ablate_attn_mat_hook(module, input, output, ablation_queries: pd.DataFrame,  ):
-    """
+    r"""
     Hook function to ablate the tokens in the attention
     mask. It will set to 0 the value vector of the
     tokens to ablate
@@ -137,7 +162,9 @@ def ablate_attn_mat_hook(module, input, output, ablation_queries: pd.DataFrame, 
 
     
 def ablate_tokens_hook_flash_attn(module, input, output, ablation_queries: pd.DataFrame, num_layers: int = 32,  ):
-    """ same of ablate_tokens_hook but for flash attention. This apply the ablation on the values vectors instead of the attention mask"""
+    r""" 
+    same of ablate_tokens_hook but for flash attention. This apply the ablation on the values vectors instead of the attention mask
+    """
     b = output
     batch_size, seq, d_model = b.shape
     if seq == 1:
@@ -171,7 +198,7 @@ def ablate_tokens_hook_flash_attn(module, input, output, ablation_queries: pd.Da
             
 
 def ablate_heads_hook(module, input, output, ablation_queries: pd.DataFrame,  ):
-    """
+    r"""
     Hook function to ablate the heads in the attention
     mask. It will set to 0 the output of the heads to
     ablate
@@ -188,7 +215,7 @@ def ablate_heads_hook(module, input, output, ablation_queries: pd.DataFrame,  ):
 
 
 def ablate_pos_keep_self_attn_hook(module, input, output, ablation_queries: pd.DataFrame,  ):
-    """
+    r"""
     Hook function to ablate the tokens in the attention
     mask but keeping the self attn weigths.
     It will set to 0 the row of tokens to ablate except for
@@ -233,16 +260,16 @@ def projected_value_vectors_head(
     act_on_input = False,
     expand_head: bool = True,
 ):
-    """
+    r"""
     Hook function to extract the values vectors of the heads. It will extract the values vectors and then project them with the final W_O projection
     As the other hooks, it will save the activations in the cache (a global variable out the scope of the function)
 
     Args:
-        - b: the input of the hook function. It's the output of the values vectors of the heads
-        - s: the state of the hook function. It's the state of the model
-        - layer: the layer of the model
-        - head: the head of the model. If "all" is passed, it will extract all the heads of the layer
-        - expand_head: bool to expand the head dimension when extracting the values vectors and the attention pattern. If true, in the cache we will have a key for each head, like "value_L0H0", "value_L0H1", ...
+        b: the input of the hook function. It's the output of the values vectors of the heads
+        s: the state of the hook function. It's the state of the model
+        layer: the layer of the model
+        head: the head of the model. If "all" is passed, it will extract all the heads of the layer
+        expand_head: bool to expand the head dimension when extracting the values vectors and the attention pattern. If true, in the cache we will have a key for each head, like "value_L0H0", "value_L0H1", ...
                         while if False, we will have only one key for each layer, like "value_L0" and the dimension of the head will be taken into account in the tensor.
 
     """
@@ -303,7 +330,7 @@ def projected_value_vectors_head(
         for head_idx in range(num_attention_heads):
                 cache[f"projected_value_L{layer}H{head_idx}"] = projected_values[:, head_idx]
     else:
-        cache[f"projected_value_L{layer}H{head}"] = projected_values[:, head]
+        cache[f"projected_value_L{layer}H{head}"] = projected_values[:, int(head)]
 
 
 def avg_attention_pattern_head(

@@ -113,6 +113,8 @@ class ModelFactory:
                 "Using an attention type different from eager could have unexpected behavior in some experiments!",
                 "WARNING",
             )
+        
+        language_model = None
         if model_name in ["facebook/chameleon-7b", "facebook/chameleon-30b"]:
             model = ChameleonForConditionalGeneration.from_pretrained(
                 model_name,
@@ -120,25 +122,7 @@ class ModelFactory:
                 device_map=device_map,
                 attn_implementation=attn_implementation,
             )
-            model_config = ModelConfig(
-                residual_stream_input_hook_name="model.layers[{}].input",
-                residual_stream_hook_name="model.layers[{}].output",
-                intermediate_stream_hook_name="model.layers[{}].post_attention_layernorm.output",
-                attn_value_hook_name="model.layers[{}].self_attn.v_proj.output",
-                attn_out_hook_name="model.layers[{}].self_attn.o_proj.output",
-                attn_in_hook_name="model.layers[{}].self_attn.input",
-                attn_matrix_hook_name="model.layers[{}].self_attn.attention_matrix_hook.output",
-                attn_out_proj_weight="model.layers[{}].self_attn.o_proj.weight",
-                attn_out_proj_bias="model.layers[{}].self_attn.o_proj.bias",
-                embed_tokens="model.embed_tokens.input",
-                num_hidden_layers=model.config.num_hidden_layers,
-                num_attention_heads=model.config.num_attention_heads,
-                hidden_size=model.config.hidden_size,
-                num_key_value_heads=model.config.num_key_value_heads,
-                num_key_value_groups=model.config.num_attention_heads
-                // model.config.num_key_value_heads,
-                head_dim=model.config.hidden_size // model.config.num_attention_heads,
-            )
+            model_config = ModelFactory._create_model_config(model, prefix="model.")
 
         elif model_name in [
             "mistral-community/pixtral-12b",
@@ -158,6 +142,8 @@ class ModelFactory:
                     device_map=device_map,
                     attn_implementation=attn_implementation,
                 )
+            else:
+                raise ValueError("Unsupported model_name")
             language_model = model.language_model
             model_config = ModelFactory._create_model_config(model, prefix="language_model.")
 
@@ -179,34 +165,7 @@ class ModelFactory:
 
         else:
             raise ValueError("Unsupported model_name")
-
         return model, language_model, model_config
-
-    @staticmethod
-    def _create_model_config(model, prefix="model."):
-        return ModelConfig(
-            residual_stream_input_hook_name=f"{prefix}layers[{{}}].input",
-            residual_stream_hook_name=f"{prefix}layers[{{}}].output",
-            intermediate_stream_hook_name=f"{prefix}layers[{{}}].post_attention_layernorm.output",
-            attn_value_hook_name=f"{prefix}layers[{{}}].self_attn.v_proj.output",
-            attn_out_hook_name=f"{prefix}layers[{{}}].self_attn.o_proj.output",
-            attn_in_hook_name=f"{prefix}layers[{{}}].self_attn.input",
-            attn_matrix_hook_name=f"{prefix}layers[{{}}].self_attn.attention_matrix_hook.output",
-            attn_out_proj_weight=f"{prefix}layers[{{}}].self_attn.o_proj.weight",
-            attn_out_proj_bias=f"{prefix}layers[{{}}].self_attn.o_proj.bias",
-            embed_tokens=f"{prefix}embed_tokens.input",
-            num_hidden_layers=model.config.num_hidden_layers,
-            num_attention_heads=model.config.num_attention_heads,
-            hidden_size=model.config.hidden_size,
-            num_key_value_heads=model.config.num_key_value_heads,
-            num_key_value_groups=model.config.num_attention_heads // model.config.num_key_value_heads,
-            head_dim=model.config.hidden_size // model.config.num_attention_heads,
-        )
-
-        else:
-            raise ValueError("Unsupported model_name")
-
-        return model, model_config
 
     @staticmethod
     def _create_model_config(model, prefix="model."):

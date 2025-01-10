@@ -12,7 +12,11 @@ from typing import (
     Any,
 )
 
-from easyroutine.interpretability.models import ModelFactory, TokenizerFactory, InputHandler
+from easyroutine.interpretability.models import (
+    ModelFactory,
+    TokenizerFactory,
+    InputHandler,
+)
 from easyroutine.interpretability.token_index import TokenIndex
 from easyroutine.interpretability.utils import get_attribute_by_name
 from easyroutine.logger import Logger, LambdaLogger
@@ -20,11 +24,9 @@ from tqdm import tqdm
 from dataclasses import dataclass
 from easyroutine.interpretability.ablation import AblationManager
 
-
 # from src.model.emu3.
 from easyroutine.interpretability.utils import (
     aggregate_cache_efficient,
-    to_string_tokens,
     map_token_to_pos,
     preprocess_patching_queries,
     logit_diff,
@@ -32,7 +34,6 @@ from easyroutine.interpretability.utils import (
     kl_divergence_diff,
 )
 from easyroutine.interpretability.hooks import (
-    partial,
     embed_hook,
     save_resid_hook,
     projected_value_vectors_head,
@@ -77,11 +78,13 @@ class HookedModel:
         )
 
         self.config = config
-        self.hf_model, self.hf_language_model, self.model_config = ModelFactory.load_model(
-            model_name=config.model_name,
-            device_map=config.device_map,
-            torch_dtype=config.torch_dtype,
-            attn_implementation=config.attn_implementation,
+        self.hf_model, self.hf_language_model, self.model_config = (
+            ModelFactory.load_model(
+                model_name=config.model_name,
+                device_map=config.device_map,
+                torch_dtype=config.torch_dtype,
+                attn_implementation=config.attn_implementation,
+            )
         )
 
         tokenizer, processor = TokenizerFactory.load_tokenizer(
@@ -97,11 +100,9 @@ class HookedModel:
         else:
             self.processor = None
             self.text_tokenizer = tokenizer
-        
-            
+
         # self.hf_language_model = extract_language_model(self.hf_model)
-        
-            
+
         self.first_device = next(self.hf_model.parameters()).device
         device_num = torch.cuda.device_count()
         self.logger.info(
@@ -119,7 +120,7 @@ class HookedModel:
         }
         self.additional_hooks = []
         self.assert_all_modules_exist()
-        
+
     def __repr__(self):
         return f"""HookedModel(model_name={self.config.model_name}):
         {self.hf_model.__repr__()}
@@ -160,7 +161,7 @@ class HookedModel:
         ]
         for hook_attribute in hook_attributes:
             self.assert_module_exists(getattr(self.model_config, hook_attribute))
-            
+
     def use_full_model(self):
         self.use_language_model = False
         if self.processor is not None:
@@ -170,22 +171,24 @@ class HookedModel:
 
     def use_language_model_only(self):
         if self.hf_language_model is None:
-            self.logger.warning("The model does not have a separate language model that can be used", std_out=True)
+            self.logger.warning(
+                "The model does not have a separate language model that can be used",
+                std_out=True,
+            )
         else:
             self.use_language_model = True
             self.logger.info("Using only language model capabilities", std_out=True)
-            
-    
+
     def get_tokenizer(self):
         return self.hf_tokenizer
 
     def get_text_tokenizer(self):
         r"""
         If the tokenizer is a processor, return just the tokenizer. If the tokenizer is a tokenizer, return the tokenizer
-        
+
         Args:
             None
-        
+
         Returns:
             tokenizer: the tokenizer of the model
         """
@@ -198,10 +201,10 @@ class HookedModel:
     def get_processor(self):
         r"""
         Return the processor of the model (None if the model does not have a processor, i.e. text only model)
-        
+
         Args:
             None
-        
+
         Returns:
             processor: the processor of the model
         """
@@ -218,33 +221,33 @@ class HookedModel:
     def device(self):
         r"""
         Return the device of the model. If the model is in multiple devices, it will return the first device
-        
+
         Args:
             None
-        
+
         Returns:
             device: the device of the model
         """
         return self.first_device
-    
-    def register_forward_hook(self, component:str, hook_function: Callable):
+
+    def register_forward_hook(self, component: str, hook_function: Callable):
         r"""
         Add a new hook to the model. The hook will be called in the forward pass of the model.
-        
+
         Args:
             component (str): the component of the model where the hook will be added.
             hook_function (Callable): the function that will be called in the forward pass of the model. The function must have the following signature:
                 def hook_function(module, input, output):
                     pass
-            
+
         Returns:
             None
-            
+
         Examples:
             >>> def hook_function(module, input, output):
             >>>     # your code here
             >>>     pass
-            >>> model.register_forward_hook("model.layers[0].self_attn", hook_function)        
+            >>> model.register_forward_hook("model.layers[0].self_attn", hook_function)
         """
         self.additional_hooks.append(
             {
@@ -259,13 +262,13 @@ class HookedModel:
     ):
         r"""
         Transform a list or a tensor of tokens in a list of string tokens.
-        
+
         Args:
             tokens (Union[list, torch.Tensor]): the tokens to transform in string tokens
-            
+
         Returns:
             string_tokens (list): the list of string tokens
-            
+
         Examples:
             >>> tokens = [101, 1234, 1235, 102]
             >>> model.to_string_tokens(tokens)
@@ -292,7 +295,7 @@ class HookedModel:
         extract_avg_attn_pattern: bool = False,
         extract_avg_values_vectors_projected: bool = False,
         extract_resid_in: bool = False,
-        extract_resid_out: bool = False,  
+        extract_resid_out: bool = False,
         extract_values: bool = False,
         extract_resid_mid: bool = False,
         save_input_ids: bool = False,
@@ -306,7 +309,7 @@ class HookedModel:
     ):
         r"""
         Create the hooks to extract the activations of the model. The hooks will be added to the model and will be called in the forward pass of the model.
-        
+
         Args:
             inputs (dict): dictionary with the inputs of the model (input_ids, attention_mask, pixel_values ...)
             cache (dict): dictionary where the activations of the model will be saved
@@ -331,7 +334,7 @@ class HookedModel:
             patching_queries (Optional[Union[dict, pd.DataFrame]]): dictionary or dataframe with the patching queries to perform during forward pass
             batch_idx (Optional[int]): index of the batch in the dataloader
             external_cache (Optional[Dict[str, torch.Tensor]]): external cache to use in the forward pass
-            
+
         Returns:
             hooks (list[dict]): list of dictionaries with the component and the intervention to perform in the forward pass of the model
         """
@@ -705,15 +708,13 @@ class HookedModel:
         attn_heads: Union[list[dict], Literal["all"]] = "all",
         batch_idx: Optional[int] = None,
         move_to_cpu: bool = False,
-                
     ):
-
         r"""
         Forward pass of the model. It will extract the activations of the model and save them in the cache. It will also perform ablation and patching if needed.
-        
+
         Args:
             inputs (dict): dictionary with the inputs of the model (input_ids, attention_mask, pixel_values ...)
-            extracted_token_position (list[str]): list of tokens to extract the activations from (["last", "end-image", "start-image", "first"])
+            target_token_positions (list[str]): list of tokens to extract the activations from (["last", "end-image", "start-image", "first"])
             split_positions (Optional[list[int]]): list of split positions of the tokens
             extract_resid_in (bool): if True, extract the input of the residual stream
             extract_resid_mid (bool): if True, extract the output of the intermediate stream
@@ -734,18 +735,20 @@ class HookedModel:
             attn_heads (Union[list[dict], Literal["all"]]): list of dictionaries with the layer and head to extract the attention pattern or 'all' to
             batch_idx (Optional[int]): index of the batch in the dataloader
             move_to_cpu (bool): if True, move the activations to the cpu
-            
+
         Returns:
             cache (dict): dictionary with the activations of the model
-            
+
         Examples:
             >>> inputs = {"input_ids": torch.tensor([[101, 1234, 1235, 102]]), "attention_mask": torch.tensor([[1, 1, 1, 1]])}
-            >>> model.forward(inputs, extracted_token_position=["last"], extract_resid_out=True)
+            >>> model.forward(inputs, target_token_positions=["last"], extract_resid_out=True)
             {'resid_out_0': tensor([[[0.1, 0.2, 0.3, 0.4]]], grad_fn=<CopyBackwards>), 'input_ids': tensor([[101, 1234, 1235, 102]]), 'mapping_index': {'last': [0]}}
         """
-        model_to_use = self.hf_language_model if self.use_language_model else self.hf_model
+        model_to_use = (
+            self.hf_language_model if self.use_language_model else self.hf_model
+        )
         assert model_to_use is not None, "Error: The model is not loaded"
-        
+
         if target_token_positions is None and any(
             [
                 extract_resid_in,
@@ -773,7 +776,13 @@ class HookedModel:
         )
         token_index, token_dict = TokenIndex(
             self.config.model_name, split_positions=split_positions
-        ).get_token_index(tokens=target_token_positions, string_tokens=string_tokens, return_type="all")
+        ).get_token_index(
+            tokens=target_token_positions,
+            string_tokens=string_tokens,
+            return_type="all",
+        )
+        assert isinstance(token_index, list), "Token index must be a list"
+        assert isinstance(token_dict, dict), "Token dict must be a dict"
 
         hooks = self.create_hooks(  # TODO: add **kwargs
             inputs=inputs,
@@ -805,7 +814,9 @@ class HookedModel:
         hook_handlers = self.set_hooks(hooks)
         # pv_model = pv.IntervenableModel(hooks, model=self.hf_model)
         # log_memory_usage("After creating the model")
-        inputs = self.input_handler.prepare_inputs(inputs, self.first_device, self.config.torch_dtype)
+        inputs = self.input_handler.prepare_inputs(
+            inputs, self.first_device, self.config.torch_dtype
+        )
         # forward pass
         output = model_to_use(
             **inputs,
@@ -863,10 +874,10 @@ class HookedModel:
         probs = torch.softmax(logits, dim=-1)
         probs = probs.squeeze()
         topk = torch.topk(probs, k)
-        #return a dictionary with the topk tokens and their probabilities
+        # return a dictionary with the topk tokens and their probabilities
         string_tokens = self.to_string_tokens(topk.indices)
         token_probs = {}
-        for token,prob in zip(string_tokens, topk.values):
+        for token, prob in zip(string_tokens, topk.values):
             if token not in token_probs:
                 token_probs[token] = prob.item()
         return token_probs
@@ -877,13 +888,13 @@ class HookedModel:
     def get_module_from_string(self, component: str):
         r"""
         Return a module from the model given the string of the module.
-        
+
         Args:
             component (str): the string of the module
-            
+
         Returns:
             module (torch.nn.Module): the module of the model
-            
+
         Examples:
             >>> model.get_module_from_string("model.layers[0].self_attn")
             BertAttention(...)
@@ -893,10 +904,10 @@ class HookedModel:
     def set_hooks(self, hooks: List[Dict[str, Any]]):
         r"""
         Set the hooks in the model
-        
+
         Args:
             hooks (list[dict]): list of dictionaries with the component and the intervention to perform in the forward pass of the model
-            
+
         Returns:
             hook_handlers (list): list of hook handlers
         """
@@ -947,7 +958,7 @@ class HookedModel:
     ):
         r"""
         __WARNING__: This method could be buggy in the return dict of the output. Pay attention!
-        
+
         Generate new tokens using the model and the inputs passed as argument
         Args:
             inputs (dict): dictionary with the inputs of the model {"input_ids": ..., "attention_mask": ..., "pixel_values": ...}
@@ -955,7 +966,7 @@ class HookedModel:
             **kwargs: additional arguments to control hooks generation (i.e. ablation_queries, patching_queries)
         Returns:
             output (dict): dictionary with the output of the model
-            
+
         Examples:
             >>> inputs = {"input_ids": torch.tensor([[101, 1234, 1235, 102]]), "attention_mask": torch.tensor([[1, 1, 1, 1]])}
             >>> model.generate(inputs)
@@ -972,6 +983,8 @@ class HookedModel:
             token_index, token_dict = TokenIndex(
                 self.config.model_name, split_positions=None
             ).get_token_index(tokens=[], string_tokens=string_tokens, return_type="all")
+            assert isinstance(token_index, list), "Token index must be a list"
+            assert isinstance(token_dict, dict), "Token dict must be a dict"
             hooks = self.create_hooks(
                 inputs=inputs,
                 token_dict=token_dict,
@@ -981,20 +994,22 @@ class HookedModel:
                 **kwargs,
             )
             hook_handlers = self.set_hooks(hooks)
-            
+
         inputs = self.input_handler.prepare_inputs(inputs, self.first_device)
-        
-        model_to_use = self.hf_language_model if self.use_language_model else self.hf_model
+
+        model_to_use = (
+            self.hf_language_model if self.use_language_model else self.hf_model
+        )
         assert model_to_use is not None, "Error: The model is not loaded"
-        
+
         output = model_to_use.generate(
-            **inputs, generation_config=generation_config, output_scores=False
+            **inputs, generation_config=generation_config, output_scores=False # type: ignore
         )
         if hook_handlers:
             self.remove_hooks(hook_handlers)
         if return_text:
-            return self.hf_tokenizer.decode(output[0], skip_special_tokens=True)
-        return output # type: ignore
+            return self.hf_tokenizer.decode(output[0], skip_special_tokens=True) # type: ignore
+        return output  # type: ignore
 
     @torch.no_grad()
     def extract_cache(
@@ -1008,17 +1023,17 @@ class HookedModel:
     ):
         r"""
         Method to extract the activations of the model from a specific dataset. Compute a forward pass for each batch of the dataloader and save the activations in the cache.
-        
+
         Args:
             dataloader (iterable): dataloader with the dataset. Each element of the dataloader must be a dictionary that contains the inputs that the model expects (input_ids, attention_mask, pixel_values ...)
             extracted_token_position (list[str]): list of tokens to extract the activations from (["last", "end-image", "start-image", "first"])
             batch_saver (Callable): function to save in the cache the additional element from each elemtn of the batch (For example, the labels of the dataset)
             move_to_cpu_after_forward (bool): if True, move the activations to the cpu right after the any forward pass of the model
             **kwargs: additional arguments to control hooks generation, basically accept any argument handled by the `.forward` method (i.e. ablation_queries, patching_queries, extract_resid_in)
-            
+
         Returns:
             final_cache: dictionary with the activations of the model. The keys are the names of the activations and the values are the activations themselve
-            
+
         Examples:
             >>> dataloader = [{"input_ids": torch.tensor([[101, 1234, 1235, 102]]), "attention_mask": torch.tensor([[1, 1, 1, 1]]), "labels": torch.tensor([1])}, ...]
             >>> model.extract_cache(dataloader, extracted_token_position=["last"], batch_saver=lambda x: {"labels": x["labels"]})
@@ -1111,32 +1126,32 @@ class HookedModel:
         **kwargs,
     ) -> Dict:
         r"""
-        Method for activation patching. This substitutes the activations of the model 
+        Method for activation patching. This substitutes the activations of the model
         with the activations of the counterfactual dataset.
 
         It performs three forward passes:
         1. Forward pass on the base dataset to extract the activations of the model (cat).
-        2. Forward pass on the target dataset to extract clean logits (dog) 
+        2. Forward pass on the target dataset to extract clean logits (dog)
         [to compare against the patched logits].
-        3. Forward pass on the target dataset to patch (cat) into (dog) 
+        3. Forward pass on the target dataset to patch (cat) into (dog)
         and extract the patched logits.
 
         Args:
-            extracted_token_position (list[str]): List of tokens to extract the activations from.
+            target_token_positions (list[str]): List of tokens to extract the activations from.
             base_dataloader (torch.utils.data.DataLoader): Dataloader with the base dataset. (dataset where we sample the activations from)
             target_dataloader (torch.utils.data.DataLoader): Dataloader with the target dataset. (dataset where we patch the activations)
             patching_query (list[dict]): List of dictionaries with the patching queries. Each dictionary must have the keys "patching_elem", "layers_to_patch" and "activation_type". The "patching_elem" is the token to patch, the "layers_to_patch" is the list of layers to patch and the "activation_type" is the type of the activation to patch. The activation type must be one of the following: "resid_in_{}", "resid_out_{}", "resid_mid_{}", "attn_in_{}", "attn_out_{}", "values_{}". The "{}" will be replaced with the layer index.
             base_dictonary_idxs (list[list[int]]): List of list of integers with the indexes of the tokens in the dictonary that we are interested in. It's useful to extract the logit difference between the clean logits and the patched logits.
-            target_dictonary_idxs (list[list[int]]): List of list of integers with the indexes of the tokens in the dictonary that we are interested in. It's useful to extract the logit difference between the clean logits and the patched logits. 
+            target_dictonary_idxs (list[list[int]]): List of list of integers with the indexes of the tokens in the dictonary that we are interested in. It's useful to extract the logit difference between the clean logits and the patched logits.
             return_logit_diff (bool): If True, it will return the logit difference between the clean logits and the patched logits.
-            
+
 
         Returns:
             final_cache: dictionary with the activations of the model. The keys are the names of the activations and the values are the activations themselve
-        
-        Examples: 
+
+        Examples:
             >>> model.compute_patching(
-            >>>     extracted_token_position=["end-image", " last"],
+            >>>     target_token_positions=["end-image", " last"],
             >>>     base_dataloader=base_dataloader,
             >>>     target_dataloader=target_dataloader,
             >>>     base_dictonary_idxs=base_dictonary_idxs,

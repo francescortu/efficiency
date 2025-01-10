@@ -4,15 +4,17 @@ from transformers import (
     ChameleonProcessor,
     ChameleonForConditionalGeneration,
     LlavaForConditionalGeneration,
+    LlavaNextForConditionalGeneration,
     PixtralProcessor,
     LlamaForCausalLM,
     LlamaTokenizer,
     T5ForConditionalGeneration,
     T5TokenizerFast,
     LlamaTokenizerFast,
+    LlavaNextProcessor,
 )
 import random
-from typing import List, Literal, Union, Dict, Optional
+from typing import List, Literal, Union, Dict, Optional, Tuple
 import torch
 
 SUPPORTED_MODELS = {
@@ -26,6 +28,7 @@ SUPPORTED_MODELS = {
     "CohereForAI/aya-101": (None, None, None),
     "meta-llama/Llama-3.2-1B": (None, None, None),
     "meta-llama/Llama-3.2-3B": (None, None, None),
+    "llava-hf/llava-v1.6-mistral-7b-hf": ("<image>", None, None),
 }
 
 
@@ -92,6 +95,7 @@ class ModelFactory:
                     device_map=device_map,
                     attn_implementation=attn_implementation,
                 )
+                language_model = None
             elif model_name in ["facebook/chameleon-7b", "facebook/chameleon-30b"]:
                 model = ChameleonForConditionalGeneration.from_pretrained(
                     model_name,
@@ -99,6 +103,7 @@ class ModelFactory:
                     device_map=device_map,
                     attn_implementation=attn_implementation,
                 )
+                language_model = None
             model_config = ModelConfig(
                 residual_stream_input_hook_name="model.layers[{}].input",
                 residual_stream_hook_name="model.layers[{}].output",
@@ -119,13 +124,25 @@ class ModelFactory:
                 head_dim=model.config.hidden_size // model.config.num_attention_heads,
             )
 
-        elif model_name in ["mistral-community/pixtral-12b"]:
-            model = LlavaForConditionalGeneration.from_pretrained(
-                model_name,
-                torch_dtype=torch_dtype,
-                device_map=device_map,
-                attn_implementation=attn_implementation,
-            )
+        elif model_name in [
+            "mistral-community/pixtral-12b",
+            "llava-hf/llava-v1.6-mistral-7b-hf",
+        ]:
+            if model_name == "mistral-community/pixtral-12b":
+                model = LlavaForConditionalGeneration.from_pretrained(
+                    model_name,
+                    torch_dtype=torch_dtype,
+                    device_map=device_map,
+                    attn_implementation=attn_implementation,
+                )
+            elif model_name == "llava-hf/llava-v1.6-mistral-7b-hf":
+                model = LlavaNextForConditionalGeneration.from_pretrained(
+                    model_name,
+                    torch_dtype=torch_dtype,
+                    device_map=device_map,
+                    attn_implementation=attn_implementation,
+                )
+            language_model = model.language_model
 
             model_config = ModelConfig(
                 residual_stream_input_hook_name="language_model.model.layers[{}].input",
@@ -172,6 +189,7 @@ class ModelFactory:
             model = LlamaForCausalLM.from_pretrained(
                 model_name, torch_dtype=torch_dtype, device_map=device_map
             )
+            language_model = None
 
             model_config = ModelConfig(
                 residual_stream_input_hook_name="model.layers[{}].input",
@@ -196,6 +214,7 @@ class ModelFactory:
             model = T5ForConditionalGeneration.from_pretrained(
                 model_name, torch_dtype=torch_dtype, device_map=device_map
             )
+            language_model = None
             model_config = ModelConfig(
                 residual_stream_input_hook_name="encoder.block[{}].input",
                 residual_stream_hook_name="encoder.block[{}].output",
@@ -217,12 +236,23 @@ class ModelFactory:
         else:
             raise ValueError("Unsupported model_name")
 
-        return model, model_config
+        return model, language_model, model_config
 
 
 class TokenizerFactory:
     @staticmethod
-    def load_tokenizer(model_name: str, torch_dtype: torch.dtype, device_map: str):
+    def load_tokenizer(
+        model_name: str, torch_dtype: torch.dtype, device_map: str
+    ) -> Tuple[
+        Union[
+            LlamaTokenizer,
+            LlamaTokenizerFast,
+            PixtralProcessor,
+            LlavaNextProcessor,
+            T5TokenizerFast,
+        ],
+        bool,
+    ]:
         if model_name in ["facebook/chameleon-7b", "facebook/chameleon-30b"]:
             processor = ChameleonProcessor.from_pretrained(
                 model_name,
@@ -239,6 +269,13 @@ class TokenizerFactory:
             is_a_processor = False
         elif model_name in ["mistral-community/pixtral-12b"]:
             processor = PixtralProcessor.from_pretrained(
+                model_name,
+                torch_dtype=torch_dtype,
+                device_map=device_map,
+            )
+            is_a_processor = True
+        elif model_name in ["llava-hf/llava-v1.6-mistral-7b-hf"]:
+            processor = LlavaNextProcessor.from_pretrained(
                 model_name,
                 torch_dtype=torch_dtype,
                 device_map=device_map,
@@ -291,6 +328,7 @@ class InputHandler:
         self,
         batch_dict: Dict[str, torch.Tensor],
         device: Union[str, torch.device],
+        torch_dtype: torch.dtype = torch.bfloat16,
     ):
         if self.model_name in [
             "facebook/chameleon-7b",
@@ -300,7 +338,7 @@ class InputHandler:
             input_dict = {
                 "input_ids": batch_dict["input_ids"],
                 "attention_mask": batch_dict["attention_mask"],
-                "pixel_values": batch_dict["pixel_values"],
+                "pixel_values": batch_dict["pixel_values"].to(torch_dtype),
             }
         elif self.model_name in ["meta-llama/Llama-3.2-1B", "meta-llama/Llama-3.2-3B"]:
             input_dict = {
@@ -314,6 +352,19 @@ class InputHandler:
                 "input_ids": batch_dict["input_ids"],
                 "attention_mask": batch_dict["attention_mask"],
             }
+        elif self.model_name in ["llava-hf/llava-v1.6-mistral-7b-hf"]:
+            if "pixel_values" not in batch_dict:
+                input_dict = {
+                    "input_ids": batch_dict["input_ids"],
+                    "attention_mask": batch_dict["attention_mask"],
+                }
+            else:
+                input_dict = {
+                    "input_ids": batch_dict["input_ids"],
+                    "attention_mask": batch_dict["attention_mask"],
+                    "pixel_values": batch_dict["pixel_values"],
+                    "image_sizes": batch_dict["image_sizes"],
+                }
         elif self.model_name in ["CohereForAI/aya-101"]:
             input_dict = {
                 "input_ids": batch_dict["input_ids"],

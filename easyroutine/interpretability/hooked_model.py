@@ -56,6 +56,7 @@ from easyroutine.interpretability.hooks import (
     ablate_tokens_hook_flash_attn,
     get_module_by_path,
 )
+
 from functools import partial
 from random import randint
 import pandas as pd
@@ -95,27 +96,31 @@ class HookedModel:
         )
 
         self.config = config
-        self.hf_model, self.model_config = ModelFactory.load_model(
+        self.hf_model, self.hf_language_model, self.model_config = ModelFactory.load_model(
             model_name=config.model_name,
             device_map=config.device_map,
             torch_dtype=config.torch_dtype,
             attn_implementation=config.attn_implementation,
         )
+
         tokenizer, processor = TokenizerFactory.load_tokenizer(
             model_name=config.model_name,
             torch_dtype=config.torch_dtype,
             device_map=config.device_map,
         )
+        self.hf_tokenizer = tokenizer
         self.input_handler = InputHandler(model_name=config.model_name)
         if processor is True:
             self.processor = tokenizer
             self.text_tokenizer = self.processor.tokenizer  # type: ignore
-            self.hf_tokenizer = self.processor
         else:
             self.processor = None
             self.text_tokenizer = tokenizer
-            self.hf_tokenizer = tokenizer
-
+        
+            
+        # self.hf_language_model = extract_language_model(self.hf_model)
+        
+            
         self.first_device = next(self.hf_model.parameters()).device
         device_num = torch.cuda.device_count()
         self.logger.info(
@@ -174,7 +179,22 @@ class HookedModel:
         ]
         for hook_attribute in hook_attributes:
             self.assert_module_exists(getattr(self.model_config, hook_attribute))
+            
+    def use_full_model(self):
+        self.use_language_model = False
+        if self.processor is not None:
+            self.logger.info("Using full model capabilities", std_out=True)
+        else:
+            self.logger.info("Using full text only model capabilities", std_out=True)
 
+    def use_language_model_only(self):
+        if self.hf_language_model is None:
+            self.logger.warning("The model does not have a separate language model that can be used", std_out=True)
+        else:
+            self.use_language_model = True
+            self.logger.info("Using only language model capabilities", std_out=True)
+            
+    
     def get_tokenizer(self):
         return self.hf_tokenizer
 
@@ -183,10 +203,14 @@ class HookedModel:
         If the tokenizer is a processor, return just the tokenizer. If the tokenizer is a tokenizer, return the tokenizer
         """
         if self.processor is not None:
+            if not hasattr(self.processor, "tokenizer"):
+                raise ValueError("The processor does not have a tokenizer")
             return self.processor.tokenizer  # type: ignore
         return self.hf_tokenizer
 
     def get_processor(self):
+        if self.processor is None:
+            raise ValueError("The model does not have a processor")
         return self.processor
 
     def eval(self):
@@ -250,7 +274,7 @@ class HookedModel:
             - extract_attn_pattern: bool to extract the attention pattern (i.e. the attention matrix)
             - extract_avg_attn_pattern: bool to extract the average attention pattern. It will extract the average of the attention pattern of the heads passed in attn_heads. The average is saved in the external_cache
             - extract_avg_values_vectors: bool to extract the average values vectors. It will extract the average of the values vectors of the heads passed in attn_heads. The average is saved in the external_cache. The computation will be
-                                         alpha_ij * ||V_j|| where alpha_ij is the attention pattern and V_j is the values vectors for each element of the batch. The average is computed for each element of the batch. It return a matrix of shape [batch, seq_len, seq_len]
+                                        alpha_ij * ||V_j|| where alpha_ij is the attention pattern and V_j is the values vectors for each element of the batch. The average is computed for each element of the batch. It return a matrix of shape [batch, seq_len, seq_len]
             - extract_intermediate_states: bool to extract the intermediate states of the model (i.e. the hiddden rappresentation between the attention and the MLP)
             - save_input_ids: bool to save the input_ids in the cache
             - extract_head_out: bool to extract the output of the heads. It will extract the output of the heads projected by the final W_O projection.
@@ -288,7 +312,7 @@ class HookedModel:
 
         # token_index, token_dict = TokenIndex(
         #     self.config.model_name, split_positions=split_positions
-        # ).get_token_index(tokens=extracted_token_position, string_tokens=string_tokens)
+        # ).get_token_index(tokens=target_token_positions, string_tokens=string_tokens)
 
         # define a dynamic factory hook. It takes a function and the corresponding kwargs and returns a function that pyvene can use. This is necessary to use partial() in the hook function
         # but still be consistent with the type of the function that pyvene expects. It's basically a custom partial function that retuns a function of type FuncType
@@ -625,7 +649,7 @@ class HookedModel:
     def forward(
         self,
         inputs,
-        extracted_token_position: List[str],
+        target_token_positions: List[str] = ["last"],
         split_positions: Optional[List[int]] = None,
         extract_resid_in: bool = False,
         extract_resid_mid: bool = False,
@@ -648,13 +672,38 @@ class HookedModel:
         move_to_cpu: bool = False,
     ):
         """ """
+        model_to_use = self.hf_language_model if self.use_language_model else self.hf_model
+        assert model_to_use is not None, "Error: The model is not loaded"
+        
+        if target_token_positions is None and any(
+            [
+                extract_resid_in,
+                extract_resid_mid,
+                extract_resid_out,
+                extract_attn_pattern,
+                extract_avg_attn_pattern,
+                extract_values_vectors_projected,
+                extract_avg_values_vectors_projected,
+                extract_values,
+                extract_head_out,
+                extract_attn_out,
+                extract_attn_in,
+                extract_avg,
+                ablation_queries,
+                patching_queries,
+            ]
+        ):
+            raise ValueError(
+                "target_token_positions must be passed if we want to extract the activations of the model"
+            )
+                
         cache = {}
         string_tokens = self.to_string_tokens(
             self.input_handler.get_input_ids(inputs).squeeze()
         )
         token_index, token_dict = TokenIndex(
             self.config.model_name, split_positions=split_positions
-        ).get_token_index(tokens=extracted_token_position, string_tokens=string_tokens, return_type="all")
+        ).get_token_index(tokens=target_token_positions, string_tokens=string_tokens, return_type="all")
 
         hooks = self.create_hooks(  # TODO: add **kwargs
             inputs=inputs,
@@ -686,9 +735,9 @@ class HookedModel:
         hook_handlers = self.set_hooks(hooks)
         # pv_model = pv.IntervenableModel(hooks, model=self.hf_model)
         # log_memory_usage("After creating the model")
-
+        inputs = self.input_handler.prepare_inputs(inputs, self.first_device, self.config.torch_dtype)
         # forward pass
-        output = self.hf_model(
+        output = model_to_use(
             **inputs,
             # output_original_output=True,
             # output_attentions=extract_attn_pattern,
@@ -711,7 +760,7 @@ class HookedModel:
 
         mapping_index = {}
         current_index = 0
-        for token in extracted_token_position:
+        for token in target_token_positions:
             mapping_index[token] = []
             if isinstance(token_dict, int):
                 mapping_index[token].append(current_index)
@@ -734,6 +783,23 @@ class HookedModel:
 
     def __call__(self, *args, **kwds):
         return self.forward(*args, **kwds)
+
+    def predict(self, k=10, **kwargs):
+        out = self.forward(**kwargs)
+        logits = out["logits"]
+        probs = torch.softmax(logits, dim=-1)
+        probs = probs.squeeze()
+        topk = torch.topk(probs, k)
+        #return a dictionary with the topk tokens and their probabilities
+        string_tokens = self.to_string_tokens(topk.indices)
+        token_probs = {}
+        for token,prob in zip(string_tokens, topk.values):
+            if token not in token_probs:
+                token_probs[token] = prob.item()
+        return token_probs
+        # return {
+        #     token: prob.item() for token, prob in zip(string_tokens, topk.values)
+        # }
 
     def get_module_from_string(self, component: str):
         return self.hf_model.retrieve_modules_from_names(component)
@@ -778,6 +844,8 @@ class HookedModel:
         self,
         inputs,
         generation_config: Optional[GenerationConfig] = None,
+        target_token_positions: Optional[List[str]] = None,
+        return_text: bool = False,
         **kwargs,
     ):
         """
@@ -791,32 +859,44 @@ class HookedModel:
         """
         # Initialize cache for logits
         # TODO FIX THIS. IT is not general and it is not working
-        raise NotImplementedError("This method is not working. It needs to be fixed")
-        # hooks = self.create_hooks(
-        #     inputs=inputs,
-        #     token_dict={},
-        #     token_index=[],
-        #     cache={},
-        #     string_tokens=to_string_tokens(
-        #         inputs["input_ids"].squeeze(), self.hf_tokenizer
-        #     ),
-        #     extract_resid_out=False,
-        #     **kwargs,
-        # )
-        # hook_handlers = self.set_hooks(hooks)
-
-        # output = self.hf_model.generate(
-        #     **inputs, generation_config=generation_config, output_scores=False
-        # )
-        # self.remove_hooks(hook_handlers)
-        # print(output)
-        # return output["sequences"] # type: ignore
+        # raise NotImplementedError("This method is not working. It needs to be fixed")
+        hook_handlers = None
+        if target_token_positions is not None:
+            string_tokens = self.to_string_tokens(
+                self.input_handler.get_input_ids(inputs).squeeze()
+            )
+            token_index, token_dict = TokenIndex(
+                self.config.model_name, split_positions=None
+            ).get_token_index(tokens=[], string_tokens=string_tokens, return_type="all")
+            hooks = self.create_hooks(
+                inputs=inputs,
+                token_dict=token_dict,
+                token_index=token_index,
+                cache={},
+                extract_resid_out=False,
+                **kwargs,
+            )
+            hook_handlers = self.set_hooks(hooks)
+            
+        inputs = self.input_handler.prepare_inputs(inputs, self.first_device)
+        
+        model_to_use = self.hf_language_model if self.use_language_model else self.hf_model
+        assert model_to_use is not None, "Error: The model is not loaded"
+        
+        output = model_to_use.generate(
+            **inputs, generation_config=generation_config, output_scores=False
+        )
+        if hook_handlers:
+            self.remove_hooks(hook_handlers)
+        if return_text:
+            return self.hf_tokenizer.decode(output[0], skip_special_tokens=True)
+        return output # type: ignore
 
     @torch.no_grad()
     def extract_cache(
         self,
         dataloader,
-        extracted_token_position: List[str],
+        target_token_positions: List[str],
         batch_saver: Callable = lambda x: None,
         move_to_cpu_after_forward: bool = True,
         # save_other_batch_elements: bool = False,
@@ -855,7 +935,7 @@ class HookedModel:
 
             cache = self.forward(
                 inputs,
-                extracted_token_position=extracted_token_position,
+                target_token_positions=target_token_positions,
                 split_positions=batch.get("split_positions", None),
                 external_cache=attn_pattern,
                 batch_idx=n_batches,
@@ -900,7 +980,7 @@ class HookedModel:
     @torch.no_grad()
     def compute_patching(
         self,
-        extracted_token_position: List[str],
+        target_token_positions: List[str],
         # counterfactual_dataset,
         base_dataloader,
         target_dataloader,
@@ -987,7 +1067,7 @@ class HookedModel:
             # first forward pass to extract the base activations
             base_cache = self.forward(
                 inputs=inputs,
-                extracted_token_position=extracted_token_position,
+                target_token_positions=target_token_positions,
                 split_positions=base_batch.get("split_positions", None),
                 **args,
             )
@@ -1014,7 +1094,7 @@ class HookedModel:
             # second forward pass to extract the clean logits
             target_clean_cache = self.forward(
                 target_inputs,
-                extracted_token_position=requested_position_to_extract,
+                target_token_positions=requested_position_to_extract,
                 split_positions=target_batch.get("split_positions", None),
                 extract_resid_out=False,
                 # move_to_cpu=True,
@@ -1024,8 +1104,8 @@ class HookedModel:
             # third forward pass to patch the activations
             target_patched_cache = self.forward(
                 target_inputs,
-                extracted_token_position=list(
-                    set(extracted_token_position + requested_position_to_extract)
+                target_token_positions=list(
+                    set(target_token_positions + requested_position_to_extract)
                 ),
                 split_positions=target_batch.get("split_positions", None),
                 patching_queries=patching_query,

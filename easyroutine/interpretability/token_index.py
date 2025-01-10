@@ -44,8 +44,17 @@ class TokenIndex:
                 special_tokens.append(i)
             elif in_image_sequence:
                 image_tokens.append(i)
+            elif token == start_image_token:
+            # Handle the case where there is no distinct start and end token
+                image_tokens.append(i)
             else:
+                # Handle the case where there is no distinct start and end token
+                if len(image_tokens) > 0 and len(image_end_tokens) == 0:
+                    image_tokens.append(i-1)
+                    last_line_image_tokens.append(i-2)
                 text_tokens.append(i)
+            
+            
 
         tokens_group, positions_group = self.group_tokens(string_tokens)
 

@@ -2,6 +2,12 @@ site_name: EasyRoutine
 site_url: https://easyroutine.github.io
 theme:
   name: material
+  palette:
+    scheme: slate
+    primary: teal
+    accent: teal
+        # Palette toggle for light mode
+
 plugins:
   - search
   - mkdocstrings:

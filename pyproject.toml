@@ -13,6 +13,9 @@ rich = "^13.9.4"
 pandas = "^2.0.0"
 numpy = "^2.1.3"
 einops = "^0.8.0"
+torch = "2.4.0"
+transformers = {path = "transformers", develop = true}
+pyyaml = "^6.0.2"
 
 
 [build-system]

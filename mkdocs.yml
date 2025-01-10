@@ -1,0 +1,11 @@
+site_name: EasyRoutine
+site_url: https://easyroutine.github.io
+theme:
+  name: material
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google

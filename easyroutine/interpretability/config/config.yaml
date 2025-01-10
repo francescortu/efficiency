@@ -1,0 +1,23 @@
+# supported_models.yaml
+models:
+  mistral-community/pixtral-12b: ["[IMG]", "[BREAK]", "[IMG_END]"]
+  Emu3-Chat: ["<|image start|>", null, "<|image end|>"]
+  Emu3-Gen: ["<|image start|>", null, "<|image end|>"]
+  Emu3-Stage1: ["<|image start|>", null, "<|image end|>"]
+  facebook/chameleon-7b: ["<racm3:break>", null, "<eoss>"]
+  facebook/chameleon-30b: ["<racm3:break>", null, "<eoss>"]
+  hf-internal-testing/tiny-random-LlamaForCausalLM: [null, null, null]
+
+token_position:
+  - last
+  - last-2
+  - last-3
+  - all
+  - all-text
+  - all-image
+  - last-image
+  - end-image
+  - special
+  - random-text
+  - random-image
+  - random-image-10

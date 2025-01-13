@@ -13,7 +13,7 @@ def load_config(yaml_file: str) -> dict:
 config = load_config("easyroutine/interpretability/config/config.yaml")
 
 SUPPORTED_MODELS = config['models']
-SUPPORTED_TOKENS = config['supported_tokens']
+SUPPORTED_TOKENS = config['token_position']
 
 
 class TokenIndex:

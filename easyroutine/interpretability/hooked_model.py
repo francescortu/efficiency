@@ -1,7 +1,5 @@
 import torch
-from transformers import (
-    GenerationConfig,
-)
+from transformers import GenerationConfig
 from typing import (
     Union,
     Literal,
@@ -18,6 +16,7 @@ from easyroutine.interpretability.models import (
     InputHandler,
 )
 from easyroutine.interpretability.token_index import TokenIndex
+from easyroutine.interpretability.activation_cache import ActivationCache
 from easyroutine.interpretability.utils import get_attribute_by_name
 from easyroutine.logger import Logger, LambdaLogger
 from tqdm import tqdm
@@ -86,6 +85,7 @@ class HookedModel:
                 attn_implementation=config.attn_implementation,
             )
         )
+        self.use_language_model = False
 
         tokenizer, processor = TokenizerFactory.load_tokenizer(
             model_name=config.model_name,
@@ -284,7 +284,7 @@ class HookedModel:
     def create_hooks(
         self,
         inputs,
-        cache: Dict[str, torch.Tensor],
+        cache: ActivationCache,
         token_index: List,
         token_dict: Dict,
         # string_tokens: List[str],
@@ -299,20 +299,20 @@ class HookedModel:
         extract_values: bool = False,
         extract_resid_mid: bool = False,
         save_input_ids: bool = False,
-        extract_head_out: bool = False,
+        # extract_head_out: bool = False, # deprecated
         extract_values_vectors_projected: bool = False,
         extract_avg: bool = False,
         ablation_queries: Optional[Union[dict, pd.DataFrame]] = None,
         patching_queries: Optional[Union[dict, pd.DataFrame]] = None,
         batch_idx: Optional[int] = None,
-        external_cache: Optional[Dict[str, torch.Tensor]] = None,
+        external_cache: Optional[ActivationCache] = None,
     ):
         r"""
         Create the hooks to extract the activations of the model. The hooks will be added to the model and will be called in the forward pass of the model.
 
         Args:
             inputs (dict): dictionary with the inputs of the model (input_ids, attention_mask, pixel_values ...)
-            cache (dict): dictionary where the activations of the model will be saved
+            cache (ActivationCache): dictionary where the activations of the model will be saved
             extracted_token_position (list[str]): list of tokens to extract the activations from (["last", "end-image", "start-image", "first"])
             string_tokens (list[str]): list of string tokens
             split_positions (Optional[list[int]]): list of split positions of the tokens
@@ -327,24 +327,18 @@ class HookedModel:
             extract_values (bool): if True, extract the values of the attention
             extract_resid_mid (bool): if True, extract the output of the intermediate stream
             save_input_ids (bool): if True, save the input_ids in the cache
-            extract_head_out (bool): if True, extract the output of the heads
+            extract_head_out (bool): if True, extract the output of the heads [DEPRECATED]
             extract_values_vectors_projected (bool): if True, extract the values vectors projected of the model
             extract_avg (bool): if True, extract the average of the activations
             ablation_queries (Optional[Union[dict, pd.DataFrame]]): dictionary or dataframe with the ablation queries to perform during forward pass
             patching_queries (Optional[Union[dict, pd.DataFrame]]): dictionary or dataframe with the patching queries to perform during forward pass
             batch_idx (Optional[int]): index of the batch in the dataloader
-            external_cache (Optional[Dict[str, torch.Tensor]]): external cache to use in the forward pass
+            external_cache (Optional[ActivationCache]): external cache to use in the forward pass
 
         Returns:
             hooks (list[dict]): list of dictionaries with the component and the intervention to perform in the forward pass of the model
         """
-        if extract_attn_pattern or extract_head_out or extract_values_vectors_projected:
-            if (
-                attn_heads is None
-            ):  # attn_head must be passed if we want to extract the attention pattern or the output of the heads. If not, raise an error
-                raise ValueError(
-                    "attn_heads must be a list of dictionaries with the layer and head to extract the attention pattern or 'all' to extract all the heads of all the layers"
-                )
+
 
         # process the token where we want the activation from
 
@@ -441,6 +435,8 @@ class HookedModel:
                 }
                 for i in range(0, self.model_config.num_hidden_layers)
             ]
+            
+
 
         if extract_avg:
             # Define a hook that saves the activations of the residual stream
@@ -634,20 +630,37 @@ class HookedModel:
                         }
                     )
         if extract_avg_attn_pattern:
-            hooks += [
-                {
-                    "component": self.model_config.attn_matrix_hook_name.format(i),
-                    "intervention": partial(
-                        avg_attention_pattern_head,
-                        layer=i,
-                        attn_pattern_current_avg=external_cache,
-                        batch_idx=batch_idx,
-                        cache=cache,
-                        extract_avg_value=extract_avg_values_vectors_projected,
-                    ),
-                }
-                for i in range(0, self.model_config.num_hidden_layers)
-            ]
+            if external_cache is None:
+                self.logger.warning(
+                    """The external_cache is None. The average could not be computed since missing an external cache where store the iterations.
+                    Returning the base attn_pattern for this input...
+                    """
+                )
+                extract_attn_pattern = True
+            elif batch_idx is None:
+                self.logger.warning(
+                    """The batch_idx is None. The average could not be computed since missing the batch index.
+                    Returning the base attn_pattern for this input...
+                    """
+                )
+                extract_attn_pattern = True
+            else:
+                # move the cache to the same device of the model
+                external_cache.to(self.first_device)
+                hooks += [
+                    {
+                        "component": self.model_config.attn_matrix_hook_name.format(i),
+                        "intervention": partial(
+                            avg_attention_pattern_head,
+                            layer=i,
+                            attn_pattern_current_avg=external_cache,
+                            batch_idx=batch_idx,
+                            cache=cache,
+                            extract_avg_value=extract_avg_values_vectors_projected,
+                        ),
+                    }
+                    for i in range(0, self.model_config.num_hidden_layers)
+                ]
         if extract_attn_pattern:
             if attn_heads == "all":
                 hooks += [
@@ -704,11 +717,11 @@ class HookedModel:
         extract_avg: bool = False,
         ablation_queries: Optional[pd.DataFrame | None] = None,
         patching_queries: Optional[pd.DataFrame | None] = None,
-        external_cache: Optional[Dict] = None,
+        external_cache: Optional[ActivationCache] = None,
         attn_heads: Union[list[dict], Literal["all"]] = "all",
         batch_idx: Optional[int] = None,
         move_to_cpu: bool = False,
-    ):
+    ) -> ActivationCache:
         r"""
         Forward pass of the model. It will extract the activations of the model and save them in the cache. It will also perform ablation and patching if needed.
 
@@ -731,13 +744,13 @@ class HookedModel:
             extract_avg (bool): if True, extract the average of the activations
             ablation_queries (Optional[pd.DataFrame | None]): dataframe with the ablation queries to perform during forward pass
             patching_queries (Optional[pd.DataFrame | None]): dataframe with the patching queries to perform during forward pass
-            external_cache (Optional[Dict]): external cache to use in the forward pass
+            external_cache (Optional[ActivationCache]): external cache to use in the forward pass
             attn_heads (Union[list[dict], Literal["all"]]): list of dictionaries with the layer and head to extract the attention pattern or 'all' to
             batch_idx (Optional[int]): index of the batch in the dataloader
             move_to_cpu (bool): if True, move the activations to the cpu
 
         Returns:
-            cache (dict): dictionary with the activations of the model
+            cache (ActivationCache): dictionary with the activations of the model
 
         Examples:
             >>> inputs = {"input_ids": torch.tensor([[101, 1234, 1235, 102]]), "attention_mask": torch.tensor([[1, 1, 1, 1]])}
@@ -770,7 +783,7 @@ class HookedModel:
             raise ValueError(
                 "target_token_positions must be passed if we want to extract the activations of the model"
             )
-        cache = {}
+        cache = ActivationCache()
         string_tokens = self.to_string_tokens(
             self.input_handler.get_input_ids(inputs).squeeze()
         )
@@ -800,7 +813,7 @@ class HookedModel:
             extract_values=extract_values,
             extract_resid_mid=extract_resid_mid,
             save_input_ids=save_input_ids,
-            extract_head_out=extract_head_out,
+            # extract_head_out=extract_head_out, # deprecated
             extract_values_vectors_projected=extract_values_vectors_projected,
             extract_avg=extract_avg,
             ablation_queries=ablation_queries,
@@ -862,7 +875,7 @@ class HookedModel:
 
         return cache
 
-    def __call__(self, *args, **kwds):
+    def __call__(self, *args, **kwds) -> ActivationCache:
         r"""
         Call the forward method of the model
         """
@@ -955,7 +968,7 @@ class HookedModel:
         target_token_positions: Optional[List[str]] = None,
         return_text: bool = False,
         **kwargs,
-    ):
+    ) -> ActivationCache:
         r"""
         __WARNING__: This method could be buggy in the return dict of the output. Pay attention!
 
@@ -965,7 +978,7 @@ class HookedModel:
             generation_config (Optional[GenerationConfig]): original hf dataclass with the generation configuration
             **kwargs: additional arguments to control hooks generation (i.e. ablation_queries, patching_queries)
         Returns:
-            output (dict): dictionary with the output of the model
+            output (ActivationCache): dictionary with the output of the model
 
         Examples:
             >>> inputs = {"input_ids": torch.tensor([[101, 1234, 1235, 102]]), "attention_mask": torch.tensor([[1, 1, 1, 1]])}
@@ -989,7 +1002,7 @@ class HookedModel:
                 inputs=inputs,
                 token_dict=token_dict,
                 token_index=token_index,
-                cache={},
+                cache=ActivationCache(),
                 extract_resid_out=False,
                 **kwargs,
             )
@@ -1003,12 +1016,14 @@ class HookedModel:
         assert model_to_use is not None, "Error: The model is not loaded"
 
         output = model_to_use.generate(
-            **inputs, generation_config=generation_config, output_scores=False # type: ignore
+            **inputs, # type: ignore
+            generation_config=generation_config,
+            output_scores=False,  # type: ignore
         )
         if hook_handlers:
             self.remove_hooks(hook_handlers)
         if return_text:
-            return self.hf_tokenizer.decode(output[0], skip_special_tokens=True) # type: ignore
+            return self.hf_tokenizer.decode(output[0], skip_special_tokens=True)  # type: ignore
         return output  # type: ignore
 
     @torch.no_grad()
@@ -1045,8 +1060,8 @@ class HookedModel:
         # get the function to save in the cache the additional element from the batch sime
 
         self.logger.info("Forward pass started", std_out=True)
-        all_cache = []  # a list of dictoionaries, each dictionary contains the activations of the model for a batch (so a dict of tensors)
-        attn_pattern = {}  # Initialize the dictionary to hold running averages
+        all_cache = ActivationCache()  # a list of dictoionaries, each dictionary contains the activations of the model for a batch (so a dict of tensors)
+        attn_pattern = ActivationCache()  # Initialize the dictionary to hold running averages
 
         example_dict = {}
         n_batches = 0  # Initialize batch counter
@@ -1072,16 +1087,16 @@ class HookedModel:
             # possible memory leak from here -___--------------->
             additional_dict = batch_saver(others)
             if additional_dict is not None:
-                cache = {**cache, **additional_dict}
+                # cache = {**cache, **additional_dict}
+                cache.update(additional_dict)
 
             if move_to_cpu_after_forward:
-                for key, value in cache.items():
-                    if isinstance(value, torch.Tensor):
-                        cache[key] = value.detach().cpu()
+                cache.cpu()
 
             n_batches += 1  # Increment batch counter# Process and remove "pattern_" keys from cache
             # log_memory_usage("Extract cache - Before append")
-            all_cache.append(cache)
+            # all_cache.append(cache)
+            all_cache.cat(cache)
             # log_memory_usage("Extract cache - After append")
             del cache
             inputs = {k: v.cpu() for k, v in inputs.items()}
@@ -1092,18 +1107,19 @@ class HookedModel:
         self.logger.info(
             "Forward pass finished - started to aggregate different batch", std_out=True
         )
-        final_cache = aggregate_cache_efficient(all_cache)
-        final_cache = {
-            **final_cache,
-            **attn_pattern,
-        }  # Add the running averages to the final cache
+        # final_cache = aggregate_cache_efficient(all_cache)
+        # final_cache = {
+        #     **final_cache,
+        #     **attn_pattern,
+        # }  # Add the running averages to the final cache
+        all_cache.update(attn_pattern)
 
         # add the example_dict to the final_cache as a sub-dictionary
-        final_cache["example_dict"] = example_dict
+        all_cache["example_dict"] = example_dict
         self.logger.info("Aggregation finished", std_out=True)
 
         torch.cuda.empty_cache()
-        return final_cache
+        return all_cache
 
     @torch.no_grad()
     def compute_patching(
@@ -1124,7 +1140,7 @@ class HookedModel:
         return_logit_diff: bool = False,
         batch_saver: Callable = lambda x: None,
         **kwargs,
-    ) -> Dict:
+    ) -> ActivationCache:
         r"""
         Method for activation patching. This substitutes the activations of the model
         with the activations of the counterfactual dataset.
@@ -1147,7 +1163,7 @@ class HookedModel:
 
 
         Returns:
-            final_cache: dictionary with the activations of the model. The keys are the names of the activations and the values are the activations themselve
+            final_cache (ActivationCache): dictionary with the activations of the model. The keys are the names of the activations and the values are the activations themselve
 
         Examples:
             >>> model.compute_patching(
@@ -1185,7 +1201,7 @@ class HookedModel:
         )
 
         # get a random number in the range of the dataset to save a random batch
-        all_cache = []
+        all_cache = ActivationCache()
         # for each batch in the dataset
         for index, (base_batch, target_batch) in tqdm(
             enumerate(zip(base_dataloader, target_dataloader)),
@@ -1325,16 +1341,18 @@ class HookedModel:
             del target_patched_cache["logits"]
 
             # move to cpu
-            for key, value in target_patched_cache.items():
-                if isinstance(value, torch.Tensor):
-                    target_patched_cache[key] = value.detach().cpu()
+            # for key, value in target_patched_cache.items():
+            #     if isinstance(value, torch.Tensor):
+            #         target_patched_cache[key] = value.detach().cpu()
+            target_patched_cache.cpu()
 
-            all_cache.append(target_patched_cache)
+            # all_cache.append(target_patched_cache)
+            all_cache.cat(target_patched_cache)
 
         self.logger.info(
             "Forward pass finished - started to aggregate different batch", std_out=True
         )
-        final_cache = aggregate_cache_efficient(all_cache)
+        # final_cache = aggregate_cache_efficient(all_cache)
 
         self.logger.info("Aggregation finished", std_out=True)
-        return final_cache
+        return all_cache

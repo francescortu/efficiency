@@ -365,12 +365,12 @@ def avg_attention_pattern_head(
     # attn_pattern = attn_pattern.to(torch.float32)
     num_heads = attn_pattern.size(1)
     for head in range(num_heads):
-        key = f"pattern_L{layer}H{head}"
+        key = f"avg_pattern_L{layer}H{head}"
         if key not in attn_pattern_current_avg:
             attn_pattern_current_avg[key] = attn_pattern[:, head]
         else:
             attn_pattern_current_avg[key] += (
-                 attn_pattern[:, head] - attn_pattern_current_avg[key]
+                attn_pattern[:, head] - attn_pattern_current_avg[key]
             ) / (batch_idx+1)
         attn_pattern_current_avg[key] = attn_pattern_current_avg[key]
         # var_key = f"M2_pattern_L{layer}H{head}"

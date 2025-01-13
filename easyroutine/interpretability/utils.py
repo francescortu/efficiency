@@ -133,6 +133,7 @@ def left_cut(tensor, size, dim):
 
 
 def aggregate_cache_efficient(all_cache):
+    #! DEPRECATED
     aggregated = defaultdict(list)
 
     # First pass: collect all tensors/data

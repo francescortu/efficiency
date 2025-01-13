@@ -25,7 +25,6 @@ from easyroutine.interpretability.ablation import AblationManager
 
 # from src.model.emu3.
 from easyroutine.interpretability.utils import (
-    aggregate_cache_efficient,
     map_token_to_pos,
     preprocess_patching_queries,
     logit_diff,
@@ -338,17 +337,6 @@ class HookedModel:
         Returns:
             hooks (list[dict]): list of dictionaries with the component and the intervention to perform in the forward pass of the model
         """
-
-
-        # process the token where we want the activation from
-
-        # token_index, token_dict = TokenIndex(
-        #     self.config.model_name, split_positions=split_positions
-        # ).get_token_index(tokens=target_token_positions, string_tokens=string_tokens)
-
-        # define a dynamic factory hook. It takes a function and the corresponding kwargs and returns a function that pyvene can use. This is necessary to use partial() in the hook function
-        # but still be consistent with the type of the function that pyvene expects. It's basically a custom partial function that retuns a function of type FuncType
-
         hooks = []
 
         if extract_resid_out:
@@ -435,8 +423,6 @@ class HookedModel:
                 }
                 for i in range(0, self.model_config.num_hidden_layers)
             ]
-            
-
 
         if extract_avg:
             # Define a hook that saves the activations of the residual stream
@@ -821,12 +807,8 @@ class HookedModel:
             batch_idx=batch_idx,
             external_cache=external_cache,
         )
-        # define the pyvene model, i.e. a wrapper around the huggingface model that allows to set hooks around the modules of the model
 
-        # log_memory_usage("Before creating the model")
         hook_handlers = self.set_hooks(hooks)
-        # pv_model = pv.IntervenableModel(hooks, model=self.hf_model)
-        # log_memory_usage("After creating the model")
         inputs = self.input_handler.prepare_inputs(
             inputs, self.first_device, self.config.torch_dtype
         )
@@ -837,20 +819,13 @@ class HookedModel:
             # output_attentions=extract_attn_pattern,
         )
 
-        # log_memory_usage("After forward pass")
 
         cache["logits"] = output.logits[:, -1]
         # since attention_patterns are returned in the output, we need to adapt to the cache structure
         if move_to_cpu:
-            for key, value in cache.items():
-                if extract_avg_values_vectors_projected:
-                    # remove the values vectors from the cache
-                    if "values" in key:
-                        del cache[key]
-                cache[key] = value.detach().cpu()
+            cache.cpu()
             if external_cache is not None:
-                for key, value in external_cache.items():
-                    external_cache[key] = value.detach().cpu()
+                external_cache.cpu()
 
         mapping_index = {}
         current_index = 0
@@ -1016,7 +991,7 @@ class HookedModel:
         assert model_to_use is not None, "Error: The model is not loaded"
 
         output = model_to_use.generate(
-            **inputs, # type: ignore
+            **inputs,  # type: ignore
             generation_config=generation_config,
             output_scores=False,  # type: ignore
         )
@@ -1061,7 +1036,9 @@ class HookedModel:
 
         self.logger.info("Forward pass started", std_out=True)
         all_cache = ActivationCache()  # a list of dictoionaries, each dictionary contains the activations of the model for a batch (so a dict of tensors)
-        attn_pattern = ActivationCache()  # Initialize the dictionary to hold running averages
+        attn_pattern = (
+            ActivationCache()
+        )  # Initialize the dictionary to hold running averages
 
         example_dict = {}
         n_batches = 0  # Initialize batch counter
@@ -1094,27 +1071,17 @@ class HookedModel:
                 cache.cpu()
 
             n_batches += 1  # Increment batch counter# Process and remove "pattern_" keys from cache
-            # log_memory_usage("Extract cache - Before append")
-            # all_cache.append(cache)
             all_cache.cat(cache)
-            # log_memory_usage("Extract cache - After append")
+            
             del cache
             inputs = {k: v.cpu() for k, v in inputs.items()}
             del inputs
             torch.cuda.empty_cache()
-            # log_memory_usage("Extract cache - After empty cache")
 
         self.logger.info(
             "Forward pass finished - started to aggregate different batch", std_out=True
         )
-        # final_cache = aggregate_cache_efficient(all_cache)
-        # final_cache = {
-        #     **final_cache,
-        #     **attn_pattern,
-        # }  # Add the running averages to the final cache
         all_cache.update(attn_pattern)
-
-        # add the example_dict to the final_cache as a sub-dictionary
         all_cache["example_dict"] = example_dict
         self.logger.info("Aggregation finished", std_out=True)
 
@@ -1340,10 +1307,6 @@ class HookedModel:
             ]
             del target_patched_cache["logits"]
 
-            # move to cpu
-            # for key, value in target_patched_cache.items():
-            #     if isinstance(value, torch.Tensor):
-            #         target_patched_cache[key] = value.detach().cpu()
             target_patched_cache.cpu()
 
             # all_cache.append(target_patched_cache)

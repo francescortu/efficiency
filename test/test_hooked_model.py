@@ -1,7 +1,11 @@
 import unittest
 import torch
 from torch.utils.data import DataLoader, Dataset
-from easyroutine.interpretability.hooked_model import HookedModel, HookedModelConfig
+from easyroutine.interpretability.hooked_model import (
+    HookedModel,
+    HookedModelConfig,
+    ExtractionConfig,
+)
 from easyroutine.interpretability.activation_cache import ActivationCache
 
 
@@ -54,7 +58,7 @@ class TestHookedModel(unittest.TestCase):
             inputs,
             extracted_token_position,
             split_positions=[4],
-            extract_resid_out=True,
+            extraction_config=ExtractionConfig(extract_resid_out=True),
         )
         # assert that cache["resid_out_0"] has shape (1,3,16)
         self.assertIn("resid_out_0", cache)
@@ -65,7 +69,7 @@ class TestHookedModel(unittest.TestCase):
             inputs,
             extracted_token_position,
             split_positions=[4],
-            extract_resid_out=True,
+            extraction_config=ExtractionConfig(extract_resid_out=True),
         )
         # assert that cache["resid_out_0"] has shape (1,2,16)
         self.assertIn("resid_out_0", cache)
@@ -148,7 +152,7 @@ class TestHookFromHookedModel(unittest.TestCase):
             self.inputs,
             self.extracted_token_position,
             split_positions=[4],
-            extract_resid_out=True,
+            extraction_config=ExtractionConfig(extract_resid_out=True),
         )
         # assert that cache["resid_out_0"] has shape (1,3,16)
         self.assertIn("resid_out_0", cache)
@@ -159,7 +163,7 @@ class TestHookFromHookedModel(unittest.TestCase):
             self.inputs,
             self.extracted_token_position,
             split_positions=[4],
-            extract_resid_in=True,
+            extraction_config=ExtractionConfig(extract_resid_in=True),
         )
         # assert that cache["resid_in_0"] has shape (1,3,16)
         self.assertIn("resid_in_0", cache)
@@ -170,7 +174,7 @@ class TestHookFromHookedModel(unittest.TestCase):
             self.inputs,
             self.extracted_token_position,
             split_positions=[4],
-            extract_resid_mid=True,
+            extraction_config=ExtractionConfig(extract_resid_mid=True),
         )
         # assert that cache["resid_mid_0"] has shape (1,3,16)
         self.assertIn("resid_mid_0", cache)
@@ -181,7 +185,7 @@ class TestHookFromHookedModel(unittest.TestCase):
             self.inputs,
             self.extracted_token_position,
             split_positions=[4],
-            extract_attn_in=True,
+            extraction_config=ExtractionConfig(extract_attn_in=True),
         )
         # assert that cache["attn_in_0"] has shape (1, 4, )
         self.assertIn("attn_in_0", cache)
@@ -192,7 +196,7 @@ class TestHookFromHookedModel(unittest.TestCase):
             self.inputs,
             self.extracted_token_position,
             split_positions=[4],
-            extract_attn_out=True,
+            extraction_config=ExtractionConfig(extract_attn_out=True),
         )
         # assert that cache["attn_out_0"] has shape (1, 4, )
         self.assertIn("attn_out_0", cache)
@@ -205,9 +209,9 @@ class TestHookFromHookedModel(unittest.TestCase):
             self.inputs,
             self.extracted_token_position,
             split_positions=[4],
-            extract_avg_attn_pattern=True,
+            extraction_config=ExtractionConfig(extract_avg_attn_pattern=True),
             external_cache=external_cache,
-            batch_idx=1
+            batch_idx=1,
         )
         # assert that cache["avg_attn_pattern_0"] has shape (1, 4, 16, 16)
         self.assertIn("avg_pattern_L1H1", external_cache)
@@ -218,7 +222,7 @@ class TestHookFromHookedModel(unittest.TestCase):
             self.inputs,
             self.extracted_token_position,
             split_positions=[4],
-            extract_attn_pattern=True,
+            extraction_config=ExtractionConfig(extract_attn_pattern=True),
         )
         # assert that cache["attn_pattern_0"] has shape (1, 4, 16, 16)
         self.assertIn("pattern_L1H1", cache)

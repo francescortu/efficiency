@@ -112,7 +112,7 @@ class TestHookedModel(unittest.TestCase):
             dataloader,
             target_token_positions=target_token_positions,
             batch_saver=batch_saver,
-            extract_resid_out=True,
+            extraction_config = ExtractionConfig(extract_resid_out=True),
         )
 
         self.assertIn("logits", final_cache)

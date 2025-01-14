@@ -18,6 +18,7 @@ from easyroutine.interpretability.models import (
 from easyroutine.interpretability.token_index import TokenIndex
 from easyroutine.interpretability.activation_cache import ActivationCache
 from easyroutine.interpretability.utils import get_attribute_by_name
+from easyroutine.interpretability.module_wrappers.manager import ModuleWrapperManager
 from easyroutine.logger import Logger, LambdaLogger
 from tqdm import tqdm
 from dataclasses import dataclass
@@ -68,7 +69,7 @@ class HookedModelConfig:
     model_name: str
     device_map: Literal["balanced", "cuda", "cpu", "auto"] = "balanced"
     torch_dtype: torch.dtype = torch.bfloat16
-    attn_implementation: Literal["eager", "flash_attention_2"] = "eager"
+    attn_implementation: Literal["eager"] = "eager" # TODO: add flash_attention_2 in custom module to support it
     batch_size: int = 1
 
 
@@ -154,6 +155,7 @@ class HookedModel:
             )
         )
         self.use_language_model = False
+        self.module_wrapper_manager = ModuleWrapperManager(model_name=config.model_name)
 
         tokenizer, processor = TokenizerFactory.load_tokenizer(
             model_name=config.model_name,
@@ -188,6 +190,7 @@ class HookedModel:
         }
         self.additional_hooks = []
         self.assert_all_modules_exist()
+        self.set_custom_modules()
 
     def __repr__(self):
         return f"""HookedModel(model_name={self.config.model_name}):
@@ -206,12 +209,19 @@ class HookedModel:
         if "{}" in component:
             for i in range(0, self.model_config.num_hidden_layers):
                 attr_name = component.format(i)
+
                 try:
                     get_attribute_by_name(self.hf_model, attr_name)
                 except AttributeError:
-                    raise ValueError(
-                        f"Component '{attr_name}' does not exist in the model. Please check the model configuration."
-                    )
+                    try:
+                        if attr_name in self.module_wrapper_manager:
+                            self.set_custom_modules()
+                            get_attribute_by_name(self.hf_model, attr_name)
+                            self.restore_original_modules()
+                    except AttributeError:
+                        raise ValueError(
+                            f"Component '{attr_name}' does not exist in the model. Please check the model configuration."
+                        )
         else:
             try:
                 get_attribute_by_name(self.hf_model, component)
@@ -229,6 +239,14 @@ class HookedModel:
         ]
         for hook_attribute in hook_attributes:
             self.assert_module_exists(getattr(self.model_config, hook_attribute))
+
+    def set_custom_modules(self):
+        self.logger.info("Setting custom modules.", std_out=True)
+        self.module_wrapper_manager.substitute_attention_module(self.hf_model)
+        
+    def restore_original_modules(self):
+        self.logger.info("Restoring original modules.", std_out=True)
+        self.module_wrapper_manager.restore_original_attention_module(self.hf_model)
 
     def use_full_model(self):
         self.use_language_model = False

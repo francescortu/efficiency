@@ -14,7 +14,7 @@
         <link rel="prev" href="../..">
       
       
-        <link rel="next" href="hooked_model/">
+        <link rel="next" href="activation_cache/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -306,6 +306,17 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    API Introduction
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -316,6 +327,55 @@
 
       </a>
       
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#simple-tutorial" class="md-nav__link">
+    <span class="md-ellipsis">
+      Simple Tutorial
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="activation_cache/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Activation cache
+  </span>
+  
+
+      </a>
     </li>
   
 
@@ -440,6 +500,23 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#simple-tutorial" class="md-nav__link">
+    <span class="md-ellipsis">
+      Simple Tutorial
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -454,6 +531,17 @@
 
 
 <h1 id="api-introduction">API Introduction</h1>
+<p><code>easyroutine.interpretability</code> is the module that implement code for extract the hidden rappresentations of HuggingFace LLMs and intervening on the forward pass.</p>
+<h2 id="simple-tutorial">Simple Tutorial</h2>
+<pre><code class="language-python">from easyroutine.interpretability import HookedModel, HookedModelConfig
+
+config = HookedModelConfig(
+    model_name=&quot;mistral-community/pixtral-12b&quot;,
+    device_map = &quot;auto&quot;
+)
+
+hooked_model = HookedModel(config)
+</code></pre>
 
 
 

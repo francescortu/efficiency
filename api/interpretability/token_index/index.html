@@ -316,6 +316,27 @@
   
   
     <li class="md-nav__item">
+      <a href="../activation_cache/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Activation cache
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../hooked_model/" class="md-nav__link">
         
   
@@ -889,7 +910,9 @@ It support mixed modalities inputs, with both text and images.</p>
 <span class="normal">287</span>
 <span class="normal">288</span>
 <span class="normal">289</span>
-<span class="normal">290</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">TokenIndex</span><span class="p">:</span>
+<span class="normal">290</span>
+<span class="normal">291</span>
+<span class="normal">292</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">TokenIndex</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    TokenIndex is one of the core class of the interpretability module.</span>
 <span class="sd">    It is used to find the right indexes that correspond to the tokens in the input of the model. </span>
@@ -1027,8 +1050,8 @@ It support mixed modalities inputs, with both text and images.</p>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
         <span class="n">string_tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
-        <span class="n">return_type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;list&quot;</span><span class="p">,</span> <span class="s2">&quot;int&quot;</span><span class="p">,</span> <span class="s2">&quot;dict&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;list&quot;</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="nb">int</span><span class="p">,</span> <span class="n">Dict</span><span class="p">]:</span>
+        <span class="n">return_type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;list&quot;</span><span class="p">,</span> <span class="s2">&quot;dict&quot;</span><span class="p">,</span> <span class="s2">&quot;all&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;list&quot;</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>  <span class="n">Dict</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">Dict</span><span class="p">]]:</span>
 <span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Main interface to get the indexes of the tokens in the input string tokens.</span>
 <span class="sd">        Args:</span>
@@ -1086,14 +1109,16 @@ It support mixed modalities inputs, with both text and images.</p>
         <span class="n">token_indexes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">categorize_tokens</span><span class="p">(</span><span class="n">string_tokens</span><span class="p">)</span>
         <span class="n">tokens_positions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_tokens_positions</span><span class="p">(</span><span class="n">tokens</span><span class="p">,</span> <span class="n">token_indexes</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;int&quot;</span><span class="p">:</span>
-            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tokens_positions</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                    <span class="s2">&quot;More than one token requested: return_type should be list, got int&quot;</span>
-                <span class="p">)</span>
-            <span class="k">return</span> <span class="n">tokens_positions</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="c1"># if return_type == &quot;int&quot;:</span>
+        <span class="c1">#     if len(tokens_positions) &gt; 1:</span>
+        <span class="c1">#         raise ValueError(</span>
+        <span class="c1">#             &quot;More than one token requested: return_type should be list, got int&quot;</span>
+        <span class="c1">#         )</span>
+        <span class="c1">#     return tokens_positions[0]</span>
         <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;dict&quot;</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_token_dict</span><span class="p">(</span><span class="n">token_indexes</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;all&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">tokens_positions</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_token_dict</span><span class="p">(</span><span class="n">token_indexes</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">tokens_positions</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">get_tokens_positions</span><span class="p">(</span>
@@ -1334,7 +1359,7 @@ Args:
       <tbody>
           <tr class="doc-section-item">
 <td><code>tokens_positions</code></td>            <td>
-                  <code><span title="typing.Union">Union</span>[<span title="typing.List">List</span>[int], int, <span title="typing.Dict">Dict</span>]</code>
+                  <code><span title="typing.Union">Union</span>[<span title="typing.List">List</span>[int], <span title="typing.Dict">Dict</span>, <span title="typing.Tuple">Tuple</span>[<span title="typing.List">List</span>[int], <span title="typing.Dict">Dict</span>]]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1447,12 +1472,14 @@ Args:
 <span class="normal">221</span>
 <span class="normal">222</span>
 <span class="normal">223</span>
-<span class="normal">224</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_token_index</span><span class="p">(</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_token_index</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
     <span class="n">string_tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
-    <span class="n">return_type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;list&quot;</span><span class="p">,</span> <span class="s2">&quot;int&quot;</span><span class="p">,</span> <span class="s2">&quot;dict&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;list&quot;</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="nb">int</span><span class="p">,</span> <span class="n">Dict</span><span class="p">]:</span>
+    <span class="n">return_type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;list&quot;</span><span class="p">,</span> <span class="s2">&quot;dict&quot;</span><span class="p">,</span> <span class="s2">&quot;all&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;list&quot;</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>  <span class="n">Dict</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">Dict</span><span class="p">]]:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Main interface to get the indexes of the tokens in the input string tokens.</span>
 <span class="sd">    Args:</span>
@@ -1510,14 +1537,16 @@ Args:
     <span class="n">token_indexes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">categorize_tokens</span><span class="p">(</span><span class="n">string_tokens</span><span class="p">)</span>
     <span class="n">tokens_positions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_tokens_positions</span><span class="p">(</span><span class="n">tokens</span><span class="p">,</span> <span class="n">token_indexes</span><span class="p">)</span>
 
-    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;int&quot;</span><span class="p">:</span>
-        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tokens_positions</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="s2">&quot;More than one token requested: return_type should be list, got int&quot;</span>
-            <span class="p">)</span>
-        <span class="k">return</span> <span class="n">tokens_positions</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="c1"># if return_type == &quot;int&quot;:</span>
+    <span class="c1">#     if len(tokens_positions) &gt; 1:</span>
+    <span class="c1">#         raise ValueError(</span>
+    <span class="c1">#             &quot;More than one token requested: return_type should be list, got int&quot;</span>
+    <span class="c1">#         )</span>
+    <span class="c1">#     return tokens_positions[0]</span>
     <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;dict&quot;</span><span class="p">:</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_token_dict</span><span class="p">(</span><span class="n">token_indexes</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;all&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">tokens_positions</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_token_dict</span><span class="p">(</span><span class="n">token_indexes</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">tokens_positions</span>
 </code></pre></div></td></tr></table></div>
             </details>

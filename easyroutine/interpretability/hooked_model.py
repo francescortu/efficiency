@@ -69,7 +69,7 @@ class HookedModelConfig:
     model_name: str
     device_map: Literal["balanced", "cuda", "cpu", "auto"] = "balanced"
     torch_dtype: torch.dtype = torch.bfloat16
-    attn_implementation: Literal["eager"] = "eager" # TODO: add flash_attention_2 in custom module to support it
+    attn_implementation: Literal["eager", "custom_eager"] = "custom_eager" # TODO: add flash_attention_2 in custom module to support it
     batch_size: int = 1
 
 
@@ -190,7 +190,13 @@ class HookedModel:
         }
         self.additional_hooks = []
         self.assert_all_modules_exist()
-        self.set_custom_modules()
+        
+        if self.config.attn_implementation == "custom_eager":
+            self.logger.info("""
+                            The model is using the custom eager attention implementation that support attention matrix hooks because I get config.attn_impelemntation == 'custom_eager'. If you don't want this, you can call HookedModel.restore_original_modules. 
+                            However, we reccomend using this implementation since the base one do not contains attention matrix hook resulting in unexpected behaviours. 
+                            """, std_out=True)
+            self.set_custom_modules()
 
     def __repr__(self):
         return f"""HookedModel(model_name={self.config.model_name}):
@@ -936,7 +942,15 @@ class HookedModel:
             last_module = component.split(".")[-1]
             # now remove the last module from the component string
             component = component[: -len(last_module) - 1]
-
+            # check if the component exists in the model
+            try:
+                self.assert_module_exists(component)
+            except ValueError as e:
+                self.logger.warning(
+                    f"Error: {e}. Probably the module {component} do not exists in the model. If the module is the attention_matrix_hook, try callig HookedModel.set_custom_hooks() or setting attn_implementation == 'custom_eager'.  Now we will skip the hook for the component {component}",
+                    std_out=True,
+                )
+                continue
             if last_module == "input":
                 hook_handlers.append(
                     get_module_by_path(

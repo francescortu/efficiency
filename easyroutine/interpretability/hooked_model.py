@@ -941,12 +941,12 @@ class HookedModel:
                 hook_handlers.append(
                     get_module_by_path(
                         self.hf_model, component
-                    ).register_forward_pre_hook(partial(hook_function, output=None))
+                    ).register_forward_pre_hook(partial(hook_function, output=None), with_kwargs=True)
                 )
             elif last_module == "output":
                 hook_handlers.append(
                     get_module_by_path(self.hf_model, component).register_forward_hook(
-                        hook_function
+                        hook_function, with_kwargs=True
                     )
                 )
 

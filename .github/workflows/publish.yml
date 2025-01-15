@@ -20,14 +20,14 @@ jobs:
     - name: Determine release type
       id: release_type
       run: |
-        if [[ "${{ env.commit_message }}" == *"[version]"* ]]; then
+        if [[ "${{ env.commit_message }}" == *"[major]"* ]]; then
           echo "release_type=major" >> $GITHUB_ENV
-        elif [[ "${{ env.commit_message }}" == *"[major-release]"* ]]; then
+        elif [[ "${{ env.commit_message }}" == *"[minor]"* ]]; then
           echo "release_type=minor" >> $GITHUB_ENV
-        elif [[ "${{ env.commit_message }}" == *"[release]"* ]]; then
+        elif [[ "${{ env.commit_message }}" == *"[patch]"* ]]; then
           echo "release_type=patch" >> $GITHUB_ENV
         else
-          echo "No release trigger found."
+          echo "No release trigger found." 
           exit 0
         fi
 

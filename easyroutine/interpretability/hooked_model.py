@@ -367,7 +367,10 @@ class HookedModel:
             ['[CLS]', 'hello', 'world', '[SEP]']
         """
         if isinstance(tokens, torch.Tensor):
-            tokens = tokens.tolist()
+            if tokens.dim() == 1:
+                tokens = tokens.tolist()
+            else:
+                tokens = tokens.squeeze().tolist()
         string_tokens = []
         for tok in tokens:
             string_tokens.append(self.hf_tokenizer.decode(tok))  # type: ignore

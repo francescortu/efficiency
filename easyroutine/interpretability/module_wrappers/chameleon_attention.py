@@ -55,6 +55,9 @@ def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
 
 
 class ChameleonAttentionWrapper(BaseAttentionWrapper):
+    """
+    Attention wrapper for the Chameleon model.
+    """
     
     @staticmethod
     def original_name():

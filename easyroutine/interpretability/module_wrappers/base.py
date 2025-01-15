@@ -15,12 +15,12 @@ class BaseAttentionWrapper(nn.Module):
     A base class for wrapping an original attention module.
 
     Provides:
-      - `_orig_module` to store the real (unwrapped) attention.
-      - A robust `__getattr__` that checks:
-          1) self.__dict__
-          2) self._modules
-          3) the base class
-          4) fallback to `_orig_module`
+        `_orig_module` to store the real (unwrapped) attention.
+        A robust `__getattr__` that checks:
+            1) self.__dict__
+            2) self._modules
+            3) the base class
+            4) fallback to `_orig_module`
     """
 
     def __init__(self, original_module: nn.Module):

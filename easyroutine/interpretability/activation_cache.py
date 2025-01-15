@@ -129,6 +129,18 @@ class ActivationCache():
         """
         return self.cache.items()
     
+    def keys(self):
+        """
+        Just like the dictionary keys method, returns a list of keys.
+        """
+        return self.cache.keys()
+    
+    def values(self):
+        """
+        Just like the dictionary values method, returns a list of values.
+        """
+        return self.cache.values()
+    
     def update(self, other):
         """
         Updates the cache with values from an additional dictionary or ActivationCache object.

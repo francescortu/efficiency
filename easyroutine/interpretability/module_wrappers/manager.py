@@ -4,7 +4,7 @@ import torch.nn as nn
 from easyroutine.interpretability.module_wrappers.chameleon_attention import (
     ChameleonAttentionWrapper,
 )
-from easyroutine.interpretability.module_wrappers.llava_attention import (
+from easyroutine.interpretability.module_wrappers.llama_attention import (
     LlamaAttentionWrapper,
 )
 from easyroutine.interpretability.module_wrappers.T5_attention import T5AttentionWrapper

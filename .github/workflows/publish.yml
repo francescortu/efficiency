@@ -13,34 +13,48 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+    - name: Extract commit message
+      id: commit_message
+      run: echo "commit_message=$(git log -1 --pretty=%B)" >> $GITHUB_ENV
 
-    - name: Increment version
+    - name: Determine release type
+      id: release_type
       run: |
-        python -m pip install toml
-        python scripts/increment_version.py
+        if [[ "${{ env.commit_message }}" == *"[version]"* ]]; then
+          echo "release_type=major" >> $GITHUB_ENV
+        elif [[ "${{ env.commit_message }}" == *"[major-release]"* ]]; then
+          echo "release_type=minor" >> $GITHUB_ENV
+        elif [[ "${{ env.commit_message }}" == *"[release]"* ]]; then
+          echo "release_type=patch" >> $GITHUB_ENV
+        else
+          echo "No release trigger found."
+          exit 0
+        fi
 
-    - name: Commit updated version
+    - name: Install dependencies
+      run: python -m pip install toml
+
+    - name: Update version
+      id: update_version
+      run: |
+        python scripts/increment_version.py pyproject.toml ${{ env.release_type }}
+
+    - name: Commit and push updated version
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         git config user.name "GitHub Actions"
         git config user.email "actions@github.com"
         git add pyproject.toml
-        git commit -m "Bump version"
-        git push
+        git commit -m "Bump version to $(cat .version)"
+        git tag "$(cat .version)"
+        git push origin main --tags
 
-    - name: Install dependencies
+    - name: Build and publish package
       run: |
-        python -m pip install --upgrade pip
-        pip install build twine
-
-    - name: Build the package
-      run: python -m build
-
-    - name: Publish to PyPI
+        python -m pip install build twine
+        python -m build
+        python -m twine upload dist/*
       env:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-      run: python -m twine upload dist/*

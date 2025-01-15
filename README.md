@@ -15,3 +15,13 @@ The interpretability module contains wrapper of huggingface LLM/VLM that help to
 ```python
 from easyroutine.interpretability import HookedModel
 ```
+
+
+
+### Development
+For publish the package push a commit with the flag:
+  - `[patch]`: x.x.7 -> x.x.8
+  - `[minor]`: x.7.x -> x.8.0
+  - `[major]`: 2.x.x -> 3.0.0
+
+Example commit: `fix multiple bus [patch]`

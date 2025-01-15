@@ -5,13 +5,16 @@ def increment_patch_version(file_path):
     with open(file_path, "r") as f:
         pyproject_data = toml.load(f)
 
-    # Access the version field
-    version = pyproject_data["project"]["version"]
+    # Access the version field under [tool.poetry]
+    if "tool" not in pyproject_data or "poetry" not in pyproject_data["tool"]:
+        raise KeyError("The file does not contain the [tool.poetry] section.")
+
+    version = pyproject_data["tool"]["poetry"]["version"]
     major, minor, patch = map(int, version.split("."))
 
     # Increment the patch version
     new_version = f"{major}.{minor}.{patch + 1}"
-    pyproject_data["project"]["version"] = new_version
+    pyproject_data["tool"]["poetry"]["version"] = new_version
 
     # Write the updated version back to pyproject.toml
     with open(file_path, "w") as f:

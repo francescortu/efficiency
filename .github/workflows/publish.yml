@@ -21,7 +21,7 @@ jobs:
     - name: Increment version
       run: |
         python -m pip install toml
-        python increment_version.py
+        python scripts/increment_version.py
 
     - name: Commit updated version
       run: |

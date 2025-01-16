@@ -78,6 +78,7 @@ class ModelFactory:
 
         - **Chameleon-7b**: A 7-billion parameter model for general-purpose tasks.
         - **Chameleon-30b**: A larger version of the Chameleon series with 30 billion parameters.
+        - **llava-hf/llava-v1.6-mistral-7b-hf**: A 7-billion parameter model for multimodal tasks.
         - **Pixtral-12b**: Optimized for image-to-text tasks.
         - **Emu3-Chat**: Fine-tuned for conversational AI.
         - **Emu3-Gen**: Specialized in text generation tasks.

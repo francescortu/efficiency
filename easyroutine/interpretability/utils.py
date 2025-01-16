@@ -12,7 +12,93 @@ from typing import Callable, Literal
 from pathlib import Path
 from PIL import Image, ImageOps
 import torch.nn.functional as F
+import torch.nn as nn
+import re
 
+
+def find_all_modules(torch_module, return_only_names: bool = False):
+    r"""
+    Given a torch_module it recursively finds all the modules in the model and returns a list of the modules. 
+    
+    Arguments:
+        torch_module (nn.Module): a torch module
+        return_only_names (bool): if True it returns only the class names of the modules
+        
+    Returns:
+        modules (list): a list of the modules in the model
+        
+    Examples:
+        >>> module = MyModule()
+        >>> module
+        model(
+            (conv1): Conv2d(3, 6, kernel_size=(5, 5), stride=(1, 1))
+            (pool): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+            (conv2): Conv2d(6, 16, kernel_size=(5, 5), stride=(1, 1))
+            (fc1): Linear(in_features=400, out_features=120, bias=True)
+            (fc2): Linear(in_features=120, out_features=84, bias=True)
+            (fc3): Linear(in_features=84, out_features=10, bias=True)
+            (other model) Other(
+                (linear): Linear(in_features=10, out_features=5, bias=True)
+            )
+        )
+        >>> find_all_modules(module)
+        ["Conv2d", "MaxPool2d", "Conv2d", "Linear", "Linear", "Linear", "Other", "Linear"]
+        >>> find_all_modules(module, return_only_names=True)
+        ['Conv2d', 'MaxPool2d', 'Conv2d', 'Linear', 'Linear', 'Linear', 'Other', 'Linear']
+    """
+    
+    modules = []
+    for name, module in torch_module.named_children():
+        if return_only_names:
+            modules.append(module.__class__.__name__)
+        else:
+            modules.append(module)
+        modules.extend(find_all_modules(module, return_only_names))
+    return modules
+    
+
+def parse_module_path(module_path):
+    r"""
+    Given a module path (str) in the form 'module.attr1[0].attr2[1]...', it returns a list of components
+    Args: 
+        module_path (str): the module path
+    Returns:
+        components (list[str]): the components of the module path
+    """
+    pattern = r'([^\.\[\]]+)(?:\[(\d+)\])?'
+    components = []
+    for attr, idx in re.findall(pattern, module_path):
+        components.append(attr)
+        if idx:
+            components.append(int(idx))
+    return components
+
+def get_module_by_path(model, module_path):
+    r"""
+    Given a model and a module path (str) in the form 'module.attr1[0].attr2[1]...', it returns the module
+    Args:
+        model (nn.Module): the model
+        module_path (str): the module path
+    Returns:
+        module (nn.Module): the module
+    """
+    
+    components = parse_module_path(module_path)
+    module = model
+    for comp in components:
+        if isinstance(comp, str):
+            if hasattr(module, comp):
+                module = getattr(module, comp)
+            else:
+                raise AttributeError(f"Module '{type(module).__name__}' has no attribute '{comp}'")
+        elif isinstance(comp, int):
+            if isinstance(module, (list, nn.ModuleList, nn.Sequential)):
+                module = module[comp]
+            else:
+                raise TypeError(f"Module '{type(module).__name__}' is not indexable")
+        else:
+            raise ValueError(f"Invalid component '{comp}' in module path")
+    return module
 
 def get_attribute_by_name(obj, attr_name):
     """Get attribute from obj recursively, given a dot-separated attr_name."""

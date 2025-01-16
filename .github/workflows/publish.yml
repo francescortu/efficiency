@@ -15,7 +15,9 @@ jobs:
 
     - name: Extract commit message
       id: commit_message
-      run: echo "commit_message=$(git log -1 --pretty=%B)" >> $GITHUB_ENV
+      run: |
+        commit_message=$(git log -1 --pretty=%B | tr '\n' ' ')  # Replace newlines with spaces
+        echo "commit_message=${commit_message}" >> $GITHUB_ENV
 
     - name: Determine release type
       id: release_type

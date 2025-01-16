@@ -28,6 +28,7 @@ class ModelConfig:
         residual_stream_input_hook_name (str): Name of the residual stream torch module where attach the hook
         residual_stream_hook_name (str): Name of the residual stram torch module where attach the hook
         intermediate_stream_hook_name (str): Name of the intermediate stream torch module where attach the hook
+        residual_stream_input_post_layernorm_hook_name (str): Name of the residual stream input post layer norm 
         attn_value_hook_name (str): Name of the attention value torch module where attach the hook
         attn_in_hook_name (str): Name of the attention input torch module where attach the hook
         attn_out_hook_name (str): Name of the attention output torch module where attach the hook
@@ -47,6 +48,7 @@ class ModelConfig:
     residual_stream_input_hook_name: str # Name of the residual stream torch module where attach the hook
     residual_stream_hook_name: str # Name of the residual stram torch module where attach the hook
     intermediate_stream_hook_name: str # Name of the intermediate stream torch module where attach the hook
+    residual_stream_input_post_layernorm_hook_name: str # Name of the residual stream input post layernorm torch module where attach the hook
     attn_value_hook_name: str # Name of the attention value torch module where attach the hook
     attn_in_hook_name: str # Name of the attention input torch module where attach the hook
     attn_out_hook_name: str # Name of the attention output torch module where attach the hook
@@ -110,7 +112,7 @@ class ModelFactory:
         """
         if attn_implementation != "eager":
             LambdaLogger.log(
-                "Using an attention type different from eager could have unexpected behavior in some experiments!",
+                "Using an attention type different from eager or custom eager could have unexpected behavior in some experiments!",
                 "WARNING",
             )
         
@@ -122,7 +124,7 @@ class ModelFactory:
                 device_map=device_map,
                 attn_implementation=attn_implementation,
             )
-            model_config = ModelFactory._create_model_config(model, prefix="model.")
+            model_config = ModelFactory._create_model_config(model.config, prefix="model.")
 
         elif model_name in [
             "mistral-community/pixtral-12b",
@@ -145,34 +147,35 @@ class ModelFactory:
             else:
                 raise ValueError("Unsupported model_name")
             language_model = model.language_model
-            model_config = ModelFactory._create_model_config(model, prefix="language_model.")
+            model_config = ModelFactory._create_model_config(model.language_model.config, prefix="language_model.model.")
 
         elif model_name in ["Emu3-Chat", "Emu3-Gen", "Emu3-Stage1"]:
             raise NotImplementedError("Emu3 model not implemented yet")
 
         elif model_name in ["hf-internal-testing/tiny-random-LlamaForCausalLM"]:
             model = LlamaForCausalLM.from_pretrained(
-                model_name, torch_dtype=torch_dtype, device_map=device_map
+                model_name, torch_dtype=torch_dtype, device_map=device_map, attn_implementation=attn_implementation
             )
-            model_config = ModelFactory._create_model_config(model)
+            model_config = ModelFactory._create_model_config(model.config)
             
         elif model_name in ["CohereForAI/aya-101"]:
             model = T5ForConditionalGeneration.from_pretrained(
-                model_name, torch_dtype=torch_dtype, device_map=device_map
+                model_name, torch_dtype=torch_dtype, device_map=device_map, attn_implementation=attn_implementation
             )
             language_model = None
-            model_config = ModelFactory._create_model_config(model, prefix="encoder.")
+            model_config = ModelFactory._create_model_config(model.config, prefix="encoder.")
 
         else:
             raise ValueError("Unsupported model_name")
         return model, language_model, model_config
 
     @staticmethod
-    def _create_model_config(model, prefix="model."):
+    def _create_model_config(model_config, prefix="model.",):
         return ModelConfig(
             residual_stream_input_hook_name=f"{prefix}layers[{{}}].input",
             residual_stream_hook_name=f"{prefix}layers[{{}}].output",
             intermediate_stream_hook_name=f"{prefix}layers[{{}}].post_attention_layernorm.output",
+            residual_stream_input_post_layernorm_hook_name=f"{prefix}layers[{{}}].self_attn.input",
             attn_value_hook_name=f"{prefix}layers[{{}}].self_attn.v_proj.output",
             attn_out_hook_name=f"{prefix}layers[{{}}].self_attn.o_proj.output",
             attn_in_hook_name=f"{prefix}layers[{{}}].self_attn.input",
@@ -180,12 +183,12 @@ class ModelFactory:
             attn_out_proj_weight=f"{prefix}layers[{{}}].self_attn.o_proj.weight",
             attn_out_proj_bias=f"{prefix}layers[{{}}].self_attn.o_proj.bias",
             embed_tokens=f"{prefix}embed_tokens.input",
-            num_hidden_layers=model.config.num_hidden_layers,
-            num_attention_heads=model.config.num_attention_heads,
-            hidden_size=model.config.hidden_size,
-            num_key_value_heads=model.config.num_key_value_heads,
-            num_key_value_groups=model.config.num_attention_heads // model.config.num_key_value_heads,
-            head_dim=model.config.hidden_size // model.config.num_attention_heads,
+            num_hidden_layers=model_config.num_hidden_layers,
+            num_attention_heads=model_config.num_attention_heads,
+            hidden_size=model_config.hidden_size,
+            num_key_value_heads=model_config.num_key_value_heads,
+            num_key_value_groups=model_config.num_attention_heads // model_config.num_key_value_heads,
+            head_dim=model_config.hidden_size // model_config.num_attention_heads,
         )
 
 
@@ -287,13 +290,35 @@ class InputHandler:
         if self.model_name in [
             "facebook/chameleon-7b",
             "facebook/chameleon-30b",
-            "mistral-community/pixtral-12b",
         ]:
             input_dict = {
                 "input_ids": batch_dict["input_ids"],
                 "attention_mask": batch_dict["attention_mask"],
                 "pixel_values": batch_dict["pixel_values"].to(torch_dtype),
             }
+        elif self.model_name in ["mistral-community/pixtral-12b"]:
+            if "pixel_values" not in batch_dict:
+                input_dict = {
+                    "input_ids": batch_dict["input_ids"],
+                    "attention_mask": batch_dict["attention_mask"],
+                }
+            else:
+                if isinstance(batch_dict["pixel_values"][0], list) and len(batch_dict["pixel_values"]) == 1:
+                    # batch_dict["pixel_values"] = batch_dict["pixel_values"][0]
+                    batch_dict["pixel_values"] = [[image.to(torch_dtype) for image in batch_dict["pixel_values"][0]]]
+                elif isinstance(batch_dict["pixel_values"], torch.Tensor):
+                    batch_dict["pixel_values"] = batch_dict["pixel_values"].to(torch_dtype)
+                elif isinstance(batch_dict["pixel_values"], list):
+                    batch_dict["pixel_values"] = [image.to(torch_dtype) for image in batch_dict["pixel_values"]]
+                else:
+                    raise ValueError("Pixel values not recognized. Please fix!")
+                input_dict = {
+                    "input_ids": batch_dict["input_ids"],
+                    "attention_mask": batch_dict["attention_mask"],
+                    "pixel_values": batch_dict["pixel_values"],
+                }        
+        
+        
         elif self.model_name in ["meta-llama/Llama-3.2-1B", "meta-llama/Llama-3.2-3B"]:
             input_dict = {
                 "input_ids": batch_dict["input_ids"],
@@ -327,8 +352,21 @@ class InputHandler:
             }
         else:
             raise ValueError(f"Unsupported model_name: {self.model_name}")
-        input_dict = {k: v.to(device) for k, v in input_dict.items()}
+        
+        for key, value in input_dict.items():
+            if isinstance(value, torch.Tensor):
+                value = value.to(device)
+            elif isinstance(value, list):
+                if isinstance(value[0], torch.Tensor):
+                    value = [v.to(device) for v in value]
+                elif isinstance(value[0], list):
+                    value = [[v.to(device) for v in vv] for vv in value]
+                else:
+                    raise ValueError(f"Problem while moving the input to the device. The input with key {key} is not a torch.Tensor, a list of torch.Tensor or a list of list of torch.Tensor.")
+            
+            input_dict[key] = value
         return input_dict
+
 
     def get_input_ids(
         self,

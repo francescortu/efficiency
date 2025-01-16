@@ -1,12 +1,14 @@
 # supported_models.yaml
 models:
+  facebook/chameleon-7b: ["<racm3:break>", null, "<eoss>"]
+  facebook/chameleon-30b: ["<racm3:break>", null, "<eoss>"]
   mistral-community/pixtral-12b: ["[IMG]", "[BREAK]", "[IMG_END]"]
   Emu3-Chat: ["<|image start|>", null, "<|image end|>"]
   Emu3-Gen: ["<|image start|>", null, "<|image end|>"]
   Emu3-Stage1: ["<|image start|>", null, "<|image end|>"]
-  facebook/chameleon-7b: ["<racm3:break>", null, "<eoss>"]
-  facebook/chameleon-30b: ["<racm3:break>", null, "<eoss>"]
   hf-internal-testing/tiny-random-LlamaForCausalLM: [null, null, null]
+  llava-hf/llava-v1.6-mistral-7b-hf: ["[IMG]", "[BREAK]", "[IMG_END]"]
+  ChoereForAI/aya-101: [null, null, null]
 
 token_position:
   - last
@@ -21,3 +23,5 @@ token_position:
   - random-text
   - random-image
   - random-image-10
+
+

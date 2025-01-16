@@ -4,54 +4,36 @@ from copy import deepcopy
 import pandas as pd
 from typing import List, Callable, Union
 from einops import rearrange, einsum
-from easyroutine.interpretability.utils import repeat_kv
+from easyroutine.interpretability.utils import repeat_kv, get_module_by_path
 from functools import partial
 import re
 import torch.nn as nn
 
-def parse_module_path(module_path):
-    r"""
-    Given a module path (str) in the form 'module.attr1[0].attr2[1]...', it returns a list of components
-    Args: 
-        module_path (str): the module path
-    Returns:
-        components (list): the components of the module path (torch modules)
-    """
-    pattern = r'([^\.\[\]]+)(?:\[(\d+)\])?'
-    components = []
-    for attr, idx in re.findall(pattern, module_path):
-        components.append(attr)
-        if idx:
-            components.append(int(idx))
-    return components
+
+
+def process_args_kwargs_output(args, kwargs, output):
+    if output is not None:
+        if isinstance(output, tuple):
+            b = output[0]
+        else:
+            b = output
+    else:
+        if len(args) > 0:
+            b = args[0]
+        else:
+            candidate_keys = ["hidden_states"]
+            for key in candidate_keys:
+                if key in kwargs:
+                    b = kwargs[key]
+                    break
+    return b # type:ignore
+
+
+
+
 
 # 2. Retrieving the module
-def get_module_by_path(model, module_path):
-    r"""
-    Given a model and a module path (str) in the form 'module.attr1[0].attr2[1]...', it returns the module
-    Args:
-        model (nn.Module): the model
-        module_path (str): the module path
-    Returns:
-        module (nn.Module): the module
-    """
-    
-    components = parse_module_path(module_path)
-    module = model
-    for comp in components:
-        if isinstance(comp, str):
-            if hasattr(module, comp):
-                module = getattr(module, comp)
-            else:
-                raise AttributeError(f"Module '{type(module).__name__}' has no attribute '{comp}'")
-        elif isinstance(comp, int):
-            if isinstance(module, (list, nn.ModuleList, nn.Sequential)):
-                module = module[comp]
-            else:
-                raise TypeError(f"Module '{type(module).__name__}' is not indexable")
-        else:
-            raise ValueError(f"Invalid component '{comp}' in module path")
-    return module
+
 
 def create_dynamic_hook(pyvene_hook: Callable, **kwargs):
     r"""
@@ -78,34 +60,21 @@ def embed_hook(module, input, output, cache, cache_key):
     return b
 
 # Define a hook that saves the activations of the residual stream
-def save_resid_hook(module, input, output,  cache, cache_key, token_index,  ):
+def save_resid_hook(module, args, kwargs, output,  cache, cache_key, token_index,  ):
     r"""
     It save the activations of the residual stream in the cache. It will save the activations in the cache (a global variable out the scope of the function)
     """
-    if output is None:
-        if isinstance(input, tuple):
-            b  = input[0]
-        else:
-            b  = input
-    else:
-        if isinstance(output, tuple):
-            b = output[0]
-        else:
-            b = output
-        
+    b = process_args_kwargs_output(args, kwargs, output)
     # slice the tensor to get the activations of the token we want to extract
     cache[cache_key] = b.data.detach().clone()[..., token_index, :]
 
 
 
-def avg_hook(module, input, output,  cache, cache_key, last_image_idx, end_image_idx,  ):
+def avg_hook(module, args, kwargs, output,  cache, cache_key, last_image_idx, end_image_idx,  ):
     r"""
     It save the activations of the residual stream in the cache. It will save the activations in the cache (a global variable out the scope of the function)
     """
-    if output is None:
-        b  = input[0]
-    else:
-        b = output[0]
+    b = process_args_kwargs_output(args, kwargs, output)
         
         
     img_avg = torch.mean(b.data.detach().clone()[:, 1 : last_image_idx + 1, :], dim=1,)
@@ -124,14 +93,14 @@ def zero_ablation(tensor):
 
         
 # b.copy_(attn_matrix)
-def ablate_attn_mat_hook(module, input, output, ablation_queries: pd.DataFrame,  ):
+def ablate_attn_mat_hook(module, args, kwargs, output, ablation_queries: pd.DataFrame,  ):
     r"""
     Hook function to ablate the tokens in the attention
     mask. It will set to 0 the value vector of the
     tokens to ablate
     """
     # Get the shape of the attention matrix
-    b = output
+    b = process_args_kwargs_output(args, kwargs, output)
     batch_size, num_heads, seq_len_q, seq_len_k = b.shape
 
     q_positions = ablation_queries['queries'].iloc[0]
@@ -161,11 +130,11 @@ def ablate_attn_mat_hook(module, input, output, ablation_queries: pd.DataFrame, 
     return b
 
     
-def ablate_tokens_hook_flash_attn(module, input, output, ablation_queries: pd.DataFrame, num_layers: int = 32,  ):
+def ablate_tokens_hook_flash_attn(module, args, kwargs, output, ablation_queries: pd.DataFrame, num_layers: int = 32,  ):
     r""" 
     same of ablate_tokens_hook but for flash attention. This apply the ablation on the values vectors instead of the attention mask
     """
-    b = output
+    b = process_args_kwargs_output(args, kwargs, output)
     batch_size, seq, d_model = b.shape
     if seq == 1:
         return b
@@ -197,13 +166,13 @@ def ablate_tokens_hook_flash_attn(module, input, output, ablation_queries: pd.Da
     return b
             
 
-def ablate_heads_hook(module, input, output, ablation_queries: pd.DataFrame,  ):
+def ablate_heads_hook(module, args, kwargs, output, ablation_queries: pd.DataFrame,  ):
     r"""
     Hook function to ablate the heads in the attention
     mask. It will set to 0 the output of the heads to
     ablate
     """
-    b = output[0]
+    b = process_args_kwargs_output(args, kwargs, output)
     attention_matrix = b.clone().data
 
     for head in ablation_queries["head"]:
@@ -214,14 +183,14 @@ def ablate_heads_hook(module, input, output, ablation_queries: pd.DataFrame,  ):
 
 
 
-def ablate_pos_keep_self_attn_hook(module, input, output, ablation_queries: pd.DataFrame,  ):
+def ablate_pos_keep_self_attn_hook(module, args, kwargs, output, ablation_queries: pd.DataFrame,  ):
     r"""
     Hook function to ablate the tokens in the attention
     mask but keeping the self attn weigths.
     It will set to 0 the row of tokens to ablate except for
     the las position
     """
-    b = output[0]
+    b = process_args_kwargs_output(args, kwargs, output)
     Warning("This function is deprecated. Use ablate_attn_mat_hook instead")
     attn_matrix = b.data
     # initial_shape = attn_matrix.shape
@@ -246,7 +215,8 @@ def ablate_image_image_hook(*args, **kwargs):
 
 def projected_value_vectors_head(
     module,
-    input,
+    args,
+    kwargs,
     output,
     layer,
     cache,
@@ -274,10 +244,7 @@ def projected_value_vectors_head(
 
     """
     # first get the values vectors
-    if output is None:
-        b = input
-    else:
-        b = output
+    b = process_args_kwargs_output(args, kwargs, output)
     
     values = b.data.detach().clone()  # (batch, num_heads,seq_len, head_dim)
 
@@ -335,7 +302,8 @@ def projected_value_vectors_head(
 
 def avg_attention_pattern_head(
     module,
-    input,
+    args,
+    kwargs,
     output,
     layer,
     attn_pattern_current_avg,
@@ -356,11 +324,8 @@ def avg_attention_pattern_head(
         - attn_pattern_current_avg: the current average attention pattern
     """
     # first get the attention pattern
-    if output is None:
-        b = input
-    else:
-        b = output
-        
+    b = process_args_kwargs_output(args, kwargs, output)
+    
     attn_pattern = b.data.detach().clone()  # (batch, num_heads,seq_len, seq_len)
     # attn_pattern = attn_pattern.to(torch.float32)
     num_heads = attn_pattern.size(1)
@@ -408,7 +373,8 @@ def avg_attention_pattern_head(
             
 def attention_pattern_head(
     module,
-    input,
+    args,
+    kwargs,
     output,
     layer,
     cache,
@@ -429,10 +395,7 @@ def attention_pattern_head(
 
     """
     # first get the attention pattern
-    if output is None:
-        b = input
-    else:
-        b = output
+    b = process_args_kwargs_output(args, kwargs, output)
         
     attn_pattern = b.data.detach().clone()  # (batch, num_heads,seq_len, seq_len)
 

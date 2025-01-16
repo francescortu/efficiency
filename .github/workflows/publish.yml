@@ -3,7 +3,7 @@ name: Publish Python Package
 on:
   push:
     branches:
-      - main  # Replace with the branch you want to trigger the publish
+      - main
 
 jobs:
   publish:
@@ -13,21 +13,51 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'  # Specify the Python version
+    - name: Extract commit message
+      id: commit_message
+      run: echo "commit_message=$(git log -1 --pretty=%B)" >> $GITHUB_ENV
+
+    - name: Determine release type
+      id: release_type
+      run: |
+        if [[ "${{ env.commit_message }}" == *"[major]"* ]]; then
+          echo "release_type=major" >> $GITHUB_ENV
+        elif [[ "${{ env.commit_message }}" == *"[minor]"* ]]; then
+          echo "release_type=minor" >> $GITHUB_ENV
+        elif [[ "${{ env.commit_message }}" == *"[patch]"* ]]; then
+          echo "release_type=patch" >> $GITHUB_ENV
+        else
+          echo "No release trigger found." 
+          exit 0
+        fi
 
     - name: Install dependencies
+      run: python -m pip install toml
+
+    - name: Update version
+      if: env.release_type  # Run only if release_type is set
       run: |
-        python -m pip install --upgrade pip
-        pip install build twine
+        python -m pip install toml
+        python scripts/increment_version.py pyproject.toml ${{ env.release_type }}
 
-    - name: Build the package
-      run: python -m build
+    - name: Commit and push updated version
+      if: env.release_type  # Run only if release_type is set
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        git add pyproject.toml
+        git commit -m "Bump version to $(cat .version)"
+        git tag "$(cat .version)"
+        git push origin main --tags
 
-    - name: Publish to PyPI
+    - name: Build and publish package
+      if: env.release_type  # Run only if release_type is set
+      run: |
+        python -m pip install build twine
+        python -m build
+        python -m twine upload dist/*
       env:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-      run: python -m twine upload dist/*

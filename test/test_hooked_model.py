@@ -11,7 +11,9 @@ from PIL import Image
 import numpy as np
 
 
-DEVICE = "cuda:4"
+DEVICE = "auto"
+
+
 class BaseHookedModelTestCase(unittest.TestCase):
     __test__ = False
     CONFIG = None
@@ -70,7 +72,6 @@ class BaseHookedModelTestCase(unittest.TestCase):
         self.assertIn("logits", cache)
 
     def test_forward_with_split_positions(self):
-
         extracted_token_position = ["position-group-0"]
         cache = self.MODEL.forward(
             self.INPUTS,
@@ -200,6 +201,21 @@ class BaseHookedModelTestCase(unittest.TestCase):
             cache["attn_out_0"].shape, (1, 4, self.MODEL.model_config.hidden_size)
         )
 
+    def test_hook_extract_resid_in_post_layernorm(self):
+        cache = self.MODEL.forward(
+            self.INPUTS,
+            self.TARGET_TOKEN_POSITION,
+            split_positions=[4],
+            extraction_config=ExtractionConfig(extract_resid_in_post_layernorm=True),
+        )
+        # assert that cache["resid_in_post_layernorm_0"] has shape (1, 4, 16)
+        self.assertIn("resid_in_post_layernorm_0", cache)
+        self.assertEqual(
+            cache["resid_in_post_layernorm_0"].shape,
+            (1, 4, self.MODEL.model_config.hidden_size),
+        )
+        
+
     def test_hook_extract_avg_attn_pattern(self):
         external_cache = ActivationCache()
         external_cache["avg_pattern_L1H1"] = torch.randn(
@@ -234,6 +250,45 @@ class BaseHookedModelTestCase(unittest.TestCase):
             cache["pattern_L1H1"].shape, (1, self.input_size, self.input_size)
         )
 
+    def test_module_wrapper(self):
+        """
+        Test if the wrapper that substitutes part of the model works equivalently to the original model.
+        """
+
+        # run the model with the original model
+        self.MODEL.restore_original_modules()
+        cache_original = self.MODEL.forward(
+            self.INPUTS,
+            self.TARGET_TOKEN_POSITION,
+            extraction_config=ExtractionConfig(
+                extract_resid_out=True,
+                extract_resid_in=True,
+                extract_resid_mid=True,
+                extract_attn_in=True,
+            ),
+        )
+        
+        self.MODEL.set_custom_modules()
+        cache_custom = self.MODEL.forward(
+            self.INPUTS,
+            self.TARGET_TOKEN_POSITION,
+            extraction_config=ExtractionConfig(
+                extract_resid_out=True,
+                extract_resid_in=True,
+                extract_resid_mid=True,
+                extract_attn_in=True,
+            ),
+        )
+        
+        # assert that the output of the original model and the custom model are the same
+        for key in cache_original.keys():
+            if key in cache_custom:
+                if isinstance(cache_original[key], torch.Tensor):
+                    if not torch.allclose(cache_original[key], cache_custom[key]):
+                        print(f"Mismatch found in key: {key}")
+                    self.assertTrue(torch.allclose(cache_original[key], cache_custom[key]))
+                
+
 
 ################### BASE TEST CASES ######################
 class TestHookedTestModel(BaseHookedModelTestCase):
@@ -256,11 +311,13 @@ class TestHookedTestModel(BaseHookedModelTestCase):
         )
         cls.INPUTS = {
             "input_ids": torch.tensor([[101, 102, 103, 104, 105, 106]], device="cuda"),
-            "attention_mask": torch.tensor([[1, 1, 1, 1, 1]], device="cuda"),
+            "attention_mask": torch.tensor([[1, 1, 1, 1, 1, 1]], device="cuda"),
         }
         cls.input_size = cls.INPUTS["input_ids"].shape[1]
 
+
 ################# Utils ####################
+
 
 def get_a_random_pil():
     # Define image dimensions
@@ -273,8 +330,6 @@ def get_a_random_pil():
     random_image = Image.fromarray(random_data)
 
     return random_image
-
-
 
 
 ################## Test Cases for Chameleon Model ####################
@@ -299,7 +354,7 @@ class TestHookedChameleonModel(BaseHookedModelTestCase):
             images=[
                 # pil image between 0 and 1
                 get_a_random_pil()
-                ],
+            ],
             return_tensors="pt",
         )  # type: ignore
         cls.INPUTS = {k: v.to(cls.MODEL.device()) for k, v in cls.INPUTS.items()}
@@ -325,10 +380,14 @@ class TestHookedPixtralModel(BaseHookedModelTestCase):
                 batch_size=1,
             )
         )
-        cls.INPUTS = {
-            "input_ids": torch.tensor([[101, 102, 103, 104, 105, 106]], device="cuda"),
-            "attention_mask": torch.tensor([[1, 1, 1, 1, 1]], device="cuda"),
-        }
+        tokenizer = cls.MODEL.get_tokenizer()
+        cls.INPUTS = tokenizer(
+            text="This is a test. [IMG]. This is a test",
+            images=[get_a_random_pil()],
+            return_tensors="pt",
+        )
+
+        cls.input_size = cls.INPUTS["input_ids"].shape[1]
 
 
 ################## Test Cases for llava Model ####################
@@ -350,14 +409,9 @@ class TestHookedLlavaModel(BaseHookedModelTestCase):
         tokenizer = cls.MODEL.get_tokenizer()
         cls.INPUTS = tokenizer(
             text="This is a test. <image>. This is a test",
-            images=[torch.randn(1, 3, 224, 224)],
+            images=[get_a_random_pil()],
             return_tensors="pt",
         )  # type: ignore
-
-        cls.INPUTS = {k: v.to(cls.MODEL.device()) for k, v in cls.INPUTS.items()}
-        cls.INPUTS["pixel_values"] = cls.INPUTS["pixel_values"].to(
-            cls.MODEL.config.torch_dtype
-        )
 
         cls.input_size = cls.INPUTS["input_ids"].shape[1]
 

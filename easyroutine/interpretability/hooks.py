@@ -4,7 +4,7 @@ from copy import deepcopy
 import pandas as pd
 from typing import List, Callable, Union
 from einops import rearrange, einsum
-from easyroutine.interpretability.utils import repeat_kv
+from easyroutine.interpretability.utils import repeat_kv, get_module_by_path
 from functools import partial
 import re
 import torch.nn as nn
@@ -30,49 +30,10 @@ def process_args_kwargs_output(args, kwargs, output):
 
 
 
-def parse_module_path(module_path):
-    r"""
-    Given a module path (str) in the form 'module.attr1[0].attr2[1]...', it returns a list of components
-    Args: 
-        module_path (str): the module path
-    Returns:
-        components (list): the components of the module path (torch modules)
-    """
-    pattern = r'([^\.\[\]]+)(?:\[(\d+)\])?'
-    components = []
-    for attr, idx in re.findall(pattern, module_path):
-        components.append(attr)
-        if idx:
-            components.append(int(idx))
-    return components
+
 
 # 2. Retrieving the module
-def get_module_by_path(model, module_path):
-    r"""
-    Given a model and a module path (str) in the form 'module.attr1[0].attr2[1]...', it returns the module
-    Args:
-        model (nn.Module): the model
-        module_path (str): the module path
-    Returns:
-        module (nn.Module): the module
-    """
-    
-    components = parse_module_path(module_path)
-    module = model
-    for comp in components:
-        if isinstance(comp, str):
-            if hasattr(module, comp):
-                module = getattr(module, comp)
-            else:
-                raise AttributeError(f"Module '{type(module).__name__}' has no attribute '{comp}'")
-        elif isinstance(comp, int):
-            if isinstance(module, (list, nn.ModuleList, nn.Sequential)):
-                module = module[comp]
-            else:
-                raise TypeError(f"Module '{type(module).__name__}' is not indexable")
-        else:
-            raise ValueError(f"Invalid component '{comp}' in module path")
-    return module
+
 
 def create_dynamic_hook(pyvene_hook: Callable, **kwargs):
     r"""

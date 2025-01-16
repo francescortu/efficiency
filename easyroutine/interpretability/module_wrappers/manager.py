@@ -1,48 +1,64 @@
 from typing import Union, Type
 import torch.nn as nn
 
+
 from easyroutine.interpretability.module_wrappers.chameleon_attention import (
     ChameleonAttentionWrapper,
 )
 from easyroutine.interpretability.module_wrappers.llama_attention import (
     LlamaAttentionWrapper,
 )
+from easyroutine.interpretability.module_wrappers.mistral_attention import (
+    MistralAttentionWrapper,
+)
 from easyroutine.interpretability.module_wrappers.T5_attention import T5AttentionWrapper
-from easyroutine.logger import Logger
+from easyroutine.logger import Logger, LambdaLogger
 
+from easyroutine.interpretability.utils import parse_module_path, find_all_modules
 
 class AttentionWrapperFactory:
     """
     Maps a given model name to the correct attention wrapper class.
     """
-
-    MODEL_NAME_TO_WRAPPER = {
-        "facebook/chameleon-7b": ChameleonAttentionWrapper,
-        "facebook/chameleon-30b": ChameleonAttentionWrapper,
-        "mistral-community/pixtral-12b": LlamaAttentionWrapper,
-        "llava-hf/llava-v1.6-mistral-7b-hf": LlamaAttentionWrapper,
-        "hf-internal-testing/tiny-random-LlamaForCausalLM": LlamaAttentionWrapper,
-        "ChoereForAI/aya-101": T5AttentionWrapper,
+    
+    AVAILABLE_MODULE_WRAPPERS:dict = {
+                                    ChameleonAttentionWrapper.original_name(): ChameleonAttentionWrapper, 
+                                    LlamaAttentionWrapper.original_name(): LlamaAttentionWrapper, 
+                                    T5AttentionWrapper.original_name(): T5AttentionWrapper, 
+                                    MistralAttentionWrapper.original_name(): MistralAttentionWrapper 
     }
+
+    # MODEL_NAME_TO_WRAPPER = {
+    #     "facebook/chameleon-7b": ChameleonAttentionWrapper,
+    #     "facebook/chameleon-30b": ChameleonAttentionWrapper,
+    #     "mistral-community/pixtral-12b": LlamaAttentionWrapper,
+    #     "llava-hf/llava-v1.6-mistral-7b-hf": LlamaAttentionWrapper,
+    #     "hf-internal-testing/tiny-random-LlamaForCausalLM": LlamaAttentionWrapper,
+    #     "ChoereForAI/aya-101": T5AttentionWrapper,
+    # }
 
     @staticmethod
     def get_wrapper_class(
-        model_name: str,
+        model: nn.Module,
     ) -> Union[
         Type[ChameleonAttentionWrapper],
         Type[LlamaAttentionWrapper],
         Type[T5AttentionWrapper],
+        Type[MistralAttentionWrapper],
     ]:
         """
         Returns the attention wrapper class for the specified model name.
         Raises a ValueError if the model is not supported.
         """
-        if model_name in AttentionWrapperFactory.MODEL_NAME_TO_WRAPPER:
-            return AttentionWrapperFactory.MODEL_NAME_TO_WRAPPER[model_name]
+        all_modules = find_all_modules(model, return_only_names=True)
+        
+        for candidate_name, candidate_wrappers in AttentionWrapperFactory.AVAILABLE_MODULE_WRAPPERS.items():
+            if candidate_name in all_modules:
+                LambdaLogger().info(f"Found a wrapper for {candidate_name}")
+                return candidate_wrappers
+        
+        LambdaLogger().warning(f"Do not have any wrapper for {model}")
 
-        raise ValueError(
-            f"Model {model_name} not supported by AttentionWrapperFactory."
-        )
 
 
 class ModuleWrapperManager:
@@ -53,14 +69,14 @@ class ModuleWrapperManager:
     recursive function.
     """
 
-    def __init__(self, model_name: str, log_level: str = "INFO"):
+    def __init__(self, model: nn.Module, log_level: str = "INFO"):
         """
         Initializes the manager with a given model name.
         """
         self.logger = Logger(logname="ModuleWrapperManager", level=log_level)
 
         # Fetch the appropriate wrapper class for the given model name
-        self.attention_wrapper_class = AttentionWrapperFactory.get_wrapper_class(model_name) # TODO: extend to support multiple module type for model
+        self.attention_wrapper_class = AttentionWrapperFactory.get_wrapper_class(model) # TODO: extend to support multiple module type for model
         # The original attention class name is fetched via a class method or attribute in the wrapper
         self.target_module_name = self.attention_wrapper_class.original_name() # TODO: extend to support multiple module type for model
 

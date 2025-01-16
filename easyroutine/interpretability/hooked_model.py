@@ -81,6 +81,7 @@ class ExtractionConfig:
         extract_resid_in (bool): if True, extract the input of the residual stream
         extract_resid_mid (bool): if True, extract the output of the intermediate stream
         extract_resid_out (bool): if True, extract the output of the residual stream
+        extract_resid_in_post_layernorm(bool): if True, extract the input of the residual stream after the layernorm
         extract_attn_pattern (bool): if True, extract the attention pattern of the attn
         extract_avg_attn_pattern (bool): if True, extract the average attention pattern of the model
         extract_values_vectors_projected (bool): if True, extract the values vectors projected of the model
@@ -97,6 +98,7 @@ class ExtractionConfig:
     extract_resid_in: bool = False
     extract_resid_mid: bool = False
     extract_resid_out: bool = False
+    extract_resid_in_post_layernorm: bool = False
     extract_attn_pattern: bool = False
     extract_avg_attn_pattern: bool = False
     extract_values_vectors_projected: bool = False
@@ -156,8 +158,8 @@ class HookedModel:
                 else config.attn_implementation,
             )
         )
-        self.use_language_model = False
-        self.module_wrapper_manager = ModuleWrapperManager(model_name=config.model_name)
+        self.base_model = None
+        self.module_wrapper_manager = ModuleWrapperManager(model =  self.hf_model)
 
         tokenizer, processor = TokenizerFactory.load_tokenizer(
             model_name=config.model_name,
@@ -260,10 +262,12 @@ class HookedModel:
         self.module_wrapper_manager.restore_original_attention_module(self.hf_model)
 
     def use_full_model(self):
-        self.use_language_model = False
+
         if self.processor is not None:
             self.logger.info("Using full model capabilities", std_out=True)
         else:
+            if self.base_model is not None:
+                self.hf_model = self.base_model
             self.logger.info("Using full text only model capabilities", std_out=True)
 
     def use_language_model_only(self):
@@ -273,7 +277,8 @@ class HookedModel:
                 std_out=True,
             )
         else:
-            self.use_language_model = True
+            self.base_model = self.hf_model 
+            self.hf_model = self.hf_language_model
             self.logger.info("Using only language model capabilities", std_out=True)
 
     def get_tokenizer(self):
@@ -452,6 +457,22 @@ class HookedModel:
                         save_resid_hook,
                         cache=cache,
                         cache_key=f"resid_in_{i}",
+                        token_index=token_index,
+                    ),
+                }
+                for i in range(0, self.model_config.num_hidden_layers)
+            ]
+            
+        if extraction_config.extract_resid_in_post_layernorm:
+            hooks += [
+                {
+                    "component": self.model_config.residual_stream_input_post_layernorm_hook_name.format(
+                        i
+                    ),
+                    "intervention": partial(
+                        save_resid_hook,
+                        cache=cache,
+                        cache_key=f"resid_in_post_layernorm_{i}",
                         token_index=token_index,
                     ),
                 }
@@ -812,10 +833,6 @@ class HookedModel:
             >>> model.forward(inputs, target_token_positions=["last"], extract_resid_out=True)
             {'resid_out_0': tensor([[[0.1, 0.2, 0.3, 0.4]]], grad_fn=<CopyBackwards>), 'input_ids': tensor([[101, 1234, 1235, 102]]), 'mapping_index': {'last': [0]}}
         """
-        model_to_use = (
-            self.hf_language_model if self.use_language_model else self.hf_model
-        )
-        assert model_to_use is not None, "Error: The model is not loaded"
 
         if target_token_positions is None and extraction_config.is_not_empty():
             raise ValueError(
@@ -852,7 +869,7 @@ class HookedModel:
             inputs, self.first_device, self.config.torch_dtype
         )
         # forward pass
-        output = model_to_use(
+        output = self.hf_model(
             **inputs,
             # output_original_output=True,
             # output_attentions=extract_attn_pattern,
@@ -1121,7 +1138,7 @@ class HookedModel:
             all_cache.cat(cache)
 
             del cache
-            inputs = {k: v.cpu() for k, v in inputs.items()}
+            inputs = self.input_handler.prepare_inputs(batch, "cpu")
             del inputs
             torch.cuda.empty_cache()
 

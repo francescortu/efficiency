@@ -18,6 +18,12 @@ class LambdaLogger():
         log_level = getattr(logging, level.upper(), logging.INFO)
         logging.getLogger().log(log_level, message)
         
+    def info(self, message: str):
+        return LambdaLogger.log(message, "INFO")
+    def warning(self, message: str):
+        return LambdaLogger.log(message, "WARNING")
+    def error(self, message: str):
+        return LambdaLogger.log(message, "ERROR")
     
 
 class Logger:

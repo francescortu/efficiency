@@ -630,6 +630,27 @@
   
   
     <li class="md-nav__item">
+      <a href="../module_wrapper/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Module Wrapper
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../token_index/" class="md-nav__link">
         
   
@@ -997,6 +1018,21 @@
           </tr>
           <tr class="doc-section-item">
             <td>
+                <code>extract_resid_in_post_layernorm(bool)</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>if True, extract the input of the residual stream after the layernorm</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
                 <code>extract_attn_pattern</code>
             </td>
             <td>
@@ -1237,7 +1273,10 @@
 <span class="normal">128</span>
 <span class="normal">129</span>
 <span class="normal">130</span>
-<span class="normal">131</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">ExtractionConfig</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Configuration of the extraction of the activations of the model. It store what activations you want to extract from the model.</span>
@@ -1246,6 +1285,7 @@
 <span class="sd">        extract_resid_in (bool): if True, extract the input of the residual stream</span>
 <span class="sd">        extract_resid_mid (bool): if True, extract the output of the intermediate stream</span>
 <span class="sd">        extract_resid_out (bool): if True, extract the output of the residual stream</span>
+<span class="sd">        extract_resid_in_post_layernorm(bool): if True, extract the input of the residual stream after the layernorm</span>
 <span class="sd">        extract_attn_pattern (bool): if True, extract the attention pattern of the attn</span>
 <span class="sd">        extract_avg_attn_pattern (bool): if True, extract the average attention pattern of the model</span>
 <span class="sd">        extract_values_vectors_projected (bool): if True, extract the values vectors projected of the model</span>
@@ -1258,9 +1298,11 @@
 <span class="sd">        extract_avg (bool): if True, extract the average of the activations</span>
 <span class="sd">        attn_heads (Union[list[dict], Literal[&quot;all&quot;]]): list of dictionaries with the layer and head to extract the attention pattern or &#39;all&#39; to</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+
     <span class="n">extract_resid_in</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">extract_resid_mid</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">extract_resid_out</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">extract_resid_in_post_layernorm</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">extract_attn_pattern</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">extract_avg_attn_pattern</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">extract_values_vectors_projected</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
@@ -1324,10 +1366,7 @@
 
             <details class="quote">
               <summary>Source code in <code>easyroutine/interpretability/hooked_model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">111</span>
-<span class="normal">112</span>
-<span class="normal">113</span>
-<span class="normal">114</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">114</span>
 <span class="normal">115</span>
 <span class="normal">116</span>
 <span class="normal">117</span>
@@ -1344,7 +1383,10 @@
 <span class="normal">128</span>
 <span class="normal">129</span>
 <span class="normal">130</span>
-<span class="normal">131</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">is_not_empty</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">is_not_empty</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Return True if at least one of the attributes is True, False otherwise, i.e. if the model should extract something!</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -1403,10 +1445,7 @@ advanced mechanistic intepretability methods like ablation, patching, etc.</p>
 
               <details class="quote">
                 <summary>Source code in <code>easyroutine/interpretability/hooked_model.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 134</span>
-<span class="normal"> 135</span>
-<span class="normal"> 136</span>
-<span class="normal"> 137</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 137</span>
 <span class="normal"> 138</span>
 <span class="normal"> 139</span>
 <span class="normal"> 140</span>
@@ -2599,7 +2638,66 @@ advanced mechanistic intepretability methods like ablation, patching, etc.</p>
 <span class="normal">1327</span>
 <span class="normal">1328</span>
 <span class="normal">1329</span>
-<span class="normal">1330</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">HookedModel</span><span class="p">:</span>
+<span class="normal">1330</span>
+<span class="normal">1331</span>
+<span class="normal">1332</span>
+<span class="normal">1333</span>
+<span class="normal">1334</span>
+<span class="normal">1335</span>
+<span class="normal">1336</span>
+<span class="normal">1337</span>
+<span class="normal">1338</span>
+<span class="normal">1339</span>
+<span class="normal">1340</span>
+<span class="normal">1341</span>
+<span class="normal">1342</span>
+<span class="normal">1343</span>
+<span class="normal">1344</span>
+<span class="normal">1345</span>
+<span class="normal">1346</span>
+<span class="normal">1347</span>
+<span class="normal">1348</span>
+<span class="normal">1349</span>
+<span class="normal">1350</span>
+<span class="normal">1351</span>
+<span class="normal">1352</span>
+<span class="normal">1353</span>
+<span class="normal">1354</span>
+<span class="normal">1355</span>
+<span class="normal">1356</span>
+<span class="normal">1357</span>
+<span class="normal">1358</span>
+<span class="normal">1359</span>
+<span class="normal">1360</span>
+<span class="normal">1361</span>
+<span class="normal">1362</span>
+<span class="normal">1363</span>
+<span class="normal">1364</span>
+<span class="normal">1365</span>
+<span class="normal">1366</span>
+<span class="normal">1367</span>
+<span class="normal">1368</span>
+<span class="normal">1369</span>
+<span class="normal">1370</span>
+<span class="normal">1371</span>
+<span class="normal">1372</span>
+<span class="normal">1373</span>
+<span class="normal">1374</span>
+<span class="normal">1375</span>
+<span class="normal">1376</span>
+<span class="normal">1377</span>
+<span class="normal">1378</span>
+<span class="normal">1379</span>
+<span class="normal">1380</span>
+<span class="normal">1381</span>
+<span class="normal">1382</span>
+<span class="normal">1383</span>
+<span class="normal">1384</span>
+<span class="normal">1385</span>
+<span class="normal">1386</span>
+<span class="normal">1387</span>
+<span class="normal">1388</span>
+<span class="normal">1389</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">HookedModel</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    This class is a wrapper around the huggingface model that allows to extract the activations of the model. It is support</span>
 <span class="sd">    advanced mechanistic intepretability methods like ablation, patching, etc.</span>
@@ -2618,10 +2716,13 @@ advanced mechanistic intepretability methods like ablation, patching, etc.</p>
                 <span class="n">model_name</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">model_name</span><span class="p">,</span>
                 <span class="n">device_map</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">device_map</span><span class="p">,</span>
                 <span class="n">torch_dtype</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">torch_dtype</span><span class="p">,</span>
-                <span class="n">attn_implementation</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">attn_implementation</span><span class="p">,</span>
+                <span class="n">attn_implementation</span><span class="o">=</span><span class="s2">&quot;eager&quot;</span>
+                <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">attn_implementation</span> <span class="o">==</span> <span class="s2">&quot;custom_eager&quot;</span>
+                <span class="k">else</span> <span class="n">config</span><span class="o">.</span><span class="n">attn_implementation</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">use_language_model</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">base_model</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">module_wrapper_manager</span> <span class="o">=</span> <span class="n">ModuleWrapperManager</span><span class="p">(</span><span class="n">model</span> <span class="o">=</span>  <span class="bp">self</span><span class="o">.</span><span class="n">hf_model</span><span class="p">)</span>
 
         <span class="n">tokenizer</span><span class="p">,</span> <span class="n">processor</span> <span class="o">=</span> <span class="n">TokenizerFactory</span><span class="o">.</span><span class="n">load_tokenizer</span><span class="p">(</span>
             <span class="n">model_name</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">model_name</span><span class="p">,</span>
@@ -2657,6 +2758,16 @@ advanced mechanistic intepretability methods like ablation, patching, etc.</p>
         <span class="bp">self</span><span class="o">.</span><span class="n">additional_hooks</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">assert_all_modules_exist</span><span class="p">()</span>
 
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">attn_implementation</span> <span class="o">==</span> <span class="s2">&quot;custom_eager&quot;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+<span class="w">                </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">                            The model is using the custom eager attention implementation that support attention matrix hooks because I get config.attn_impelemntation == &#39;custom_eager&#39;. If you don&#39;t want this, you can call HookedModel.restore_original_modules. </span>
+<span class="sd">                            However, we reccomend using this implementation since the base one do not contains attention matrix hook resulting in unexpected behaviours. </span>
+<span class="sd">                            &quot;&quot;&quot;</span><span class="p">,</span>
+                <span class="n">std_out</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">set_custom_modules</span><span class="p">()</span>
+
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;HookedModel(model_name=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">model_name</span><span class="si">}</span><span class="s2">):</span>
 <span class="s2">        </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">hf_model</span><span class="o">.</span><span class="fm">__repr__</span><span class="p">()</span><span class="si">}</span>
@@ -2674,12 +2785,19 @@ advanced mechanistic intepretability methods like ablation, patching, etc.</p>
         <span class="k">if</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">&quot;</span> <span class="ow">in</span> <span class="n">component</span><span class="p">:</span>
             <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_config</span><span class="o">.</span><span class="n">num_hidden_layers</span><span class="p">):</span>
                 <span class="n">attr_name</span> <span class="o">=</span> <span class="n">component</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
                 <span class="k">try</span><span class="p">:</span>
                     <span class="n">get_attribute_by_name</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hf_model</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">)</span>
                 <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
-                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                        <span class="sa">f</span><span class="s2">&quot;Component &#39;</span><span class="si">{</span><span class="n">attr_name</span><span class="si">}</span><span class="s2">&#39; does not exist in the model. Please check the model configuration.&quot;</span>
-                    <span class="p">)</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">attr_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">module_wrapper_manager</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">set_custom_modules</span><span class="p">()</span>
+                            <span class="n">get_attribute_by_name</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hf_model</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">)</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">restore_original_modules</span><span class="p">()</span>
+                    <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;Component &#39;</span><span class="si">{</span><span class="n">attr_name</span><span class="si">}</span><span class="s2">&#39; does not exist in the model. Please check the model configuration.&quot;</span>
+                        <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">get_attribute_by_name</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hf_model</span><span class="p">,</span> <span class="n">component</span><span class="p">)</span>
@@ -2698,11 +2816,21 @@ advanced mechanistic intepretability methods like ablation, patching, etc.</p>
         <span class="k">for</span> <span class="n">hook_attribute</span> <span class="ow">in</span> <span class="n">hook_attributes</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">assert_module_exists</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model_config</span><span class="p">,</span> <span class="n">hook_attribute</span><span class="p">))</span>
 
+    <span class="k">def</span><span class="w"> </span><span class="nf">set_custom_modules</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Setting custom modules.&quot;</span><span class="p">,</span> <span class="n">std_out</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">module_wrapper_manager</span><span class="o">.</span><span class="n">substitute_attention_module</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hf_model</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">restore_original_modules</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Restoring original modules.&quot;</span><span class="p">,</span> <span class="n">std_out</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">module_wrapper_manager</span><span class="o">.</span><span class="n">restore_original_attention_module</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hf_model</span><span class="p">)</span>
+
     <span class="k">def</span><span class="w"> </span><span class="nf">use_full_model</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">use_language_model</span> <span class="o">=</span> <span class="kc">False</span>
+
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">processor</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Using full model capabilities&quot;</span><span class="p">,</span> <span class="n">std_out</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">base_model</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">hf_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">base_model</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Using full text only model capabilities&quot;</span><span class="p">,</span> <span class="n">std_out</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">use_language_model_only</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -2712,7 +2840,8 @@ advanced mechanistic intepretability methods like ablation, patching, etc.</p>
                 <span class="n">std_out</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">use_language_model</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">base_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hf_model</span> 
+            <span class="bp">self</span><span class="o">.</span><span class="n">hf_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hf_language_model</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Using only language model capabilities&quot;</span><span class="p">,</span> <span class="n">std_out</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">get_tokenizer</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -2811,7 +2940,10 @@ advanced mechanistic intepretability methods like ablation, patching, etc.</p>
 <span class="sd">            [&#39;[CLS]&#39;, &#39;hello&#39;, &#39;world&#39;, &#39;[SEP]&#39;]</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tokens</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-            <span class="n">tokens</span> <span class="o">=</span> <span class="n">tokens</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">tokens</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">tokens</span> <span class="o">=</span> <span class="n">tokens</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">tokens</span> <span class="o">=</span> <span class="n">tokens</span><span class="o">.</span><span class="n">squeeze</span><span class="p">()</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
         <span class="n">string_tokens</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">tok</span> <span class="ow">in</span> <span class="n">tokens</span><span class="p">:</span>
             <span class="n">string_tokens</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hf_tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">tok</span><span class="p">))</span>  <span class="c1"># type: ignore</span>
@@ -2888,6 +3020,22 @@ advanced mechanistic intepretability methods like ablation, patching, etc.</p>
                         <span class="n">save_resid_hook</span><span class="p">,</span>
                         <span class="n">cache</span><span class="o">=</span><span class="n">cache</span><span class="p">,</span>
                         <span class="n">cache_key</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;resid_in_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">token_index</span><span class="o">=</span><span class="n">token_index</span><span class="p">,</span>
+                    <span class="p">),</span>
+                <span class="p">}</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_config</span><span class="o">.</span><span class="n">num_hidden_layers</span><span class="p">)</span>
+            <span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">extraction_config</span><span class="o">.</span><span class="n">extract_resid_in_post_layernorm</span><span class="p">:</span>
+            <span class="n">hooks</span> <span class="o">+=</span> <span class="p">[</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;component&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_config</span><span class="o">.</span><span class="n">residual_stream_input_post_layernorm_hook_name</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                        <span class="n">i</span>
+                    <span class="p">),</span>
+                    <span class="s2">&quot;intervention&quot;</span><span class="p">:</span> <span class="n">partial</span><span class="p">(</span>
+                        <span class="n">save_resid_hook</span><span class="p">,</span>
+                        <span class="n">cache</span><span class="o">=</span><span class="n">cache</span><span class="p">,</span>
+                        <span class="n">cache_key</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;resid_in_post_layernorm_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
                         <span class="n">token_index</span><span class="o">=</span><span class="n">token_index</span><span class="p">,</span>
                     <span class="p">),</span>
                 <span class="p">}</span>
@@ -3248,10 +3396,6 @@ advanced mechanistic intepretability methods like ablation, patching, etc.</p>
 <span class="sd">            &gt;&gt;&gt; model.forward(inputs, target_token_positions=[&quot;last&quot;], extract_resid_out=True)</span>
 <span class="sd">            {&#39;resid_out_0&#39;: tensor([[[0.1, 0.2, 0.3, 0.4]]], grad_fn=&lt;CopyBackwards&gt;), &#39;input_ids&#39;: tensor([[101, 1234, 1235, 102]]), &#39;mapping_index&#39;: {&#39;last&#39;: [0]}}</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">model_to_use</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">hf_language_model</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_language_model</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">hf_model</span>
-        <span class="p">)</span>
-        <span class="k">assert</span> <span class="n">model_to_use</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;Error: The model is not loaded&quot;</span>
 
         <span class="k">if</span> <span class="n">target_token_positions</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">extraction_config</span><span class="o">.</span><span class="n">is_not_empty</span><span class="p">():</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
@@ -3288,7 +3432,7 @@ advanced mechanistic intepretability methods like ablation, patching, etc.</p>
             <span class="n">inputs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">first_device</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">torch_dtype</span>
         <span class="p">)</span>
         <span class="c1"># forward pass</span>
-        <span class="n">output</span> <span class="o">=</span> <span class="n">model_to_use</span><span class="p">(</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hf_model</span><span class="p">(</span>
             <span class="o">**</span><span class="n">inputs</span><span class="p">,</span>
             <span class="c1"># output_original_output=True,</span>
             <span class="c1"># output_attentions=extract_attn_pattern,</span>
@@ -3386,17 +3530,27 @@ advanced mechanistic intepretability methods like ablation, patching, etc.</p>
             <span class="n">last_module</span> <span class="o">=</span> <span class="n">component</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
             <span class="c1"># now remove the last module from the component string</span>
             <span class="n">component</span> <span class="o">=</span> <span class="n">component</span><span class="p">[:</span> <span class="o">-</span><span class="nb">len</span><span class="p">(</span><span class="n">last_module</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
-
+            <span class="c1"># check if the component exists in the model</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">assert_module_exists</span><span class="p">(</span><span class="n">component</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">. Probably the module </span><span class="si">{</span><span class="n">component</span><span class="si">}</span><span class="s2"> do not exists in the model. If the module is the attention_matrix_hook, try callig HookedModel.set_custom_hooks() or setting attn_implementation == &#39;custom_eager&#39;.  Now we will skip the hook for the component </span><span class="si">{</span><span class="n">component</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">std_out</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">continue</span>
             <span class="k">if</span> <span class="n">last_module</span> <span class="o">==</span> <span class="s2">&quot;input&quot;</span><span class="p">:</span>
                 <span class="n">hook_handlers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                     <span class="n">get_module_by_path</span><span class="p">(</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">hf_model</span><span class="p">,</span> <span class="n">component</span>
-                    <span class="p">)</span><span class="o">.</span><span class="n">register_forward_pre_hook</span><span class="p">(</span><span class="n">partial</span><span class="p">(</span><span class="n">hook_function</span><span class="p">,</span> <span class="n">output</span><span class="o">=</span><span class="kc">None</span><span class="p">))</span>
+                    <span class="p">)</span><span class="o">.</span><span class="n">register_forward_pre_hook</span><span class="p">(</span>
+                        <span class="n">partial</span><span class="p">(</span><span class="n">hook_function</span><span class="p">,</span> <span class="n">output</span><span class="o">=</span><span class="kc">None</span><span class="p">),</span> <span class="n">with_kwargs</span><span class="o">=</span><span class="kc">True</span>
+                    <span class="p">)</span>
                 <span class="p">)</span>
             <span class="k">elif</span> <span class="n">last_module</span> <span class="o">==</span> <span class="s2">&quot;output&quot;</span><span class="p">:</span>
                 <span class="n">hook_handlers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                     <span class="n">get_module_by_path</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hf_model</span><span class="p">,</span> <span class="n">component</span><span class="p">)</span><span class="o">.</span><span class="n">register_forward_hook</span><span class="p">(</span>
-                        <span class="n">hook_function</span>
+                        <span class="n">hook_function</span><span class="p">,</span> <span class="n">with_kwargs</span><span class="o">=</span><span class="kc">True</span>
                     <span class="p">)</span>
                 <span class="p">)</span>
 
@@ -3547,7 +3701,7 @@ advanced mechanistic intepretability methods like ablation, patching, etc.</p>
             <span class="n">all_cache</span><span class="o">.</span><span class="n">cat</span><span class="p">(</span><span class="n">cache</span><span class="p">)</span>
 
             <span class="k">del</span> <span class="n">cache</span>
-            <span class="n">inputs</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">inputs</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+            <span class="n">inputs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_handler</span><span class="o">.</span><span class="n">prepare_inputs</span><span class="p">(</span><span class="n">batch</span><span class="p">,</span> <span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
             <span class="k">del</span> <span class="n">inputs</span>
             <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">empty_cache</span><span class="p">()</span>
 
@@ -3826,11 +3980,11 @@ advanced mechanistic intepretability methods like ablation, patching, etc.</p>
 
             <details class="quote">
               <summary>Source code in <code>easyroutine/interpretability/hooked_model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">859</span>
-<span class="normal">860</span>
-<span class="normal">861</span>
-<span class="normal">862</span>
-<span class="normal">863</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwds</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ActivationCache</span><span class="p">:</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">908</span>
+<span class="normal">909</span>
+<span class="normal">910</span>
+<span class="normal">911</span>
+<span class="normal">912</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwds</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ActivationCache</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Call the forward method of the model</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -4042,66 +4196,7 @@ and extract the patched logits.</p>
 
             <details class="quote">
               <summary>Source code in <code>easyroutine/interpretability/hooked_model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1096</span>
-<span class="normal">1097</span>
-<span class="normal">1098</span>
-<span class="normal">1099</span>
-<span class="normal">1100</span>
-<span class="normal">1101</span>
-<span class="normal">1102</span>
-<span class="normal">1103</span>
-<span class="normal">1104</span>
-<span class="normal">1105</span>
-<span class="normal">1106</span>
-<span class="normal">1107</span>
-<span class="normal">1108</span>
-<span class="normal">1109</span>
-<span class="normal">1110</span>
-<span class="normal">1111</span>
-<span class="normal">1112</span>
-<span class="normal">1113</span>
-<span class="normal">1114</span>
-<span class="normal">1115</span>
-<span class="normal">1116</span>
-<span class="normal">1117</span>
-<span class="normal">1118</span>
-<span class="normal">1119</span>
-<span class="normal">1120</span>
-<span class="normal">1121</span>
-<span class="normal">1122</span>
-<span class="normal">1123</span>
-<span class="normal">1124</span>
-<span class="normal">1125</span>
-<span class="normal">1126</span>
-<span class="normal">1127</span>
-<span class="normal">1128</span>
-<span class="normal">1129</span>
-<span class="normal">1130</span>
-<span class="normal">1131</span>
-<span class="normal">1132</span>
-<span class="normal">1133</span>
-<span class="normal">1134</span>
-<span class="normal">1135</span>
-<span class="normal">1136</span>
-<span class="normal">1137</span>
-<span class="normal">1138</span>
-<span class="normal">1139</span>
-<span class="normal">1140</span>
-<span class="normal">1141</span>
-<span class="normal">1142</span>
-<span class="normal">1143</span>
-<span class="normal">1144</span>
-<span class="normal">1145</span>
-<span class="normal">1146</span>
-<span class="normal">1147</span>
-<span class="normal">1148</span>
-<span class="normal">1149</span>
-<span class="normal">1150</span>
-<span class="normal">1151</span>
-<span class="normal">1152</span>
-<span class="normal">1153</span>
-<span class="normal">1154</span>
-<span class="normal">1155</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1155</span>
 <span class="normal">1156</span>
 <span class="normal">1157</span>
 <span class="normal">1158</span>
@@ -4276,7 +4371,66 @@ and extract the patched logits.</p>
 <span class="normal">1327</span>
 <span class="normal">1328</span>
 <span class="normal">1329</span>
-<span class="normal">1330</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">()</span>
+<span class="normal">1330</span>
+<span class="normal">1331</span>
+<span class="normal">1332</span>
+<span class="normal">1333</span>
+<span class="normal">1334</span>
+<span class="normal">1335</span>
+<span class="normal">1336</span>
+<span class="normal">1337</span>
+<span class="normal">1338</span>
+<span class="normal">1339</span>
+<span class="normal">1340</span>
+<span class="normal">1341</span>
+<span class="normal">1342</span>
+<span class="normal">1343</span>
+<span class="normal">1344</span>
+<span class="normal">1345</span>
+<span class="normal">1346</span>
+<span class="normal">1347</span>
+<span class="normal">1348</span>
+<span class="normal">1349</span>
+<span class="normal">1350</span>
+<span class="normal">1351</span>
+<span class="normal">1352</span>
+<span class="normal">1353</span>
+<span class="normal">1354</span>
+<span class="normal">1355</span>
+<span class="normal">1356</span>
+<span class="normal">1357</span>
+<span class="normal">1358</span>
+<span class="normal">1359</span>
+<span class="normal">1360</span>
+<span class="normal">1361</span>
+<span class="normal">1362</span>
+<span class="normal">1363</span>
+<span class="normal">1364</span>
+<span class="normal">1365</span>
+<span class="normal">1366</span>
+<span class="normal">1367</span>
+<span class="normal">1368</span>
+<span class="normal">1369</span>
+<span class="normal">1370</span>
+<span class="normal">1371</span>
+<span class="normal">1372</span>
+<span class="normal">1373</span>
+<span class="normal">1374</span>
+<span class="normal">1375</span>
+<span class="normal">1376</span>
+<span class="normal">1377</span>
+<span class="normal">1378</span>
+<span class="normal">1379</span>
+<span class="normal">1380</span>
+<span class="normal">1381</span>
+<span class="normal">1382</span>
+<span class="normal">1383</span>
+<span class="normal">1384</span>
+<span class="normal">1385</span>
+<span class="normal">1386</span>
+<span class="normal">1387</span>
+<span class="normal">1388</span>
+<span class="normal">1389</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">()</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">compute_patching</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">target_token_positions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
@@ -4938,44 +5092,7 @@ and extract the patched logits.</p>
 
             <details class="quote">
               <summary>Source code in <code>easyroutine/interpretability/hooked_model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">352</span>
-<span class="normal">353</span>
-<span class="normal">354</span>
-<span class="normal">355</span>
-<span class="normal">356</span>
-<span class="normal">357</span>
-<span class="normal">358</span>
-<span class="normal">359</span>
-<span class="normal">360</span>
-<span class="normal">361</span>
-<span class="normal">362</span>
-<span class="normal">363</span>
-<span class="normal">364</span>
-<span class="normal">365</span>
-<span class="normal">366</span>
-<span class="normal">367</span>
-<span class="normal">368</span>
-<span class="normal">369</span>
-<span class="normal">370</span>
-<span class="normal">371</span>
-<span class="normal">372</span>
-<span class="normal">373</span>
-<span class="normal">374</span>
-<span class="normal">375</span>
-<span class="normal">376</span>
-<span class="normal">377</span>
-<span class="normal">378</span>
-<span class="normal">379</span>
-<span class="normal">380</span>
-<span class="normal">381</span>
-<span class="normal">382</span>
-<span class="normal">383</span>
-<span class="normal">384</span>
-<span class="normal">385</span>
-<span class="normal">386</span>
-<span class="normal">387</span>
-<span class="normal">388</span>
-<span class="normal">389</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">389</span>
 <span class="normal">390</span>
 <span class="normal">391</span>
 <span class="normal">392</span>
@@ -5330,7 +5447,60 @@ and extract the patched logits.</p>
 <span class="normal">741</span>
 <span class="normal">742</span>
 <span class="normal">743</span>
-<span class="normal">744</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">create_hooks</span><span class="p">(</span>
+<span class="normal">744</span>
+<span class="normal">745</span>
+<span class="normal">746</span>
+<span class="normal">747</span>
+<span class="normal">748</span>
+<span class="normal">749</span>
+<span class="normal">750</span>
+<span class="normal">751</span>
+<span class="normal">752</span>
+<span class="normal">753</span>
+<span class="normal">754</span>
+<span class="normal">755</span>
+<span class="normal">756</span>
+<span class="normal">757</span>
+<span class="normal">758</span>
+<span class="normal">759</span>
+<span class="normal">760</span>
+<span class="normal">761</span>
+<span class="normal">762</span>
+<span class="normal">763</span>
+<span class="normal">764</span>
+<span class="normal">765</span>
+<span class="normal">766</span>
+<span class="normal">767</span>
+<span class="normal">768</span>
+<span class="normal">769</span>
+<span class="normal">770</span>
+<span class="normal">771</span>
+<span class="normal">772</span>
+<span class="normal">773</span>
+<span class="normal">774</span>
+<span class="normal">775</span>
+<span class="normal">776</span>
+<span class="normal">777</span>
+<span class="normal">778</span>
+<span class="normal">779</span>
+<span class="normal">780</span>
+<span class="normal">781</span>
+<span class="normal">782</span>
+<span class="normal">783</span>
+<span class="normal">784</span>
+<span class="normal">785</span>
+<span class="normal">786</span>
+<span class="normal">787</span>
+<span class="normal">788</span>
+<span class="normal">789</span>
+<span class="normal">790</span>
+<span class="normal">791</span>
+<span class="normal">792</span>
+<span class="normal">793</span>
+<span class="normal">794</span>
+<span class="normal">795</span>
+<span class="normal">796</span>
+<span class="normal">797</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">create_hooks</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">inputs</span><span class="p">,</span>
     <span class="n">cache</span><span class="p">:</span> <span class="n">ActivationCache</span><span class="p">,</span>
@@ -5401,6 +5571,22 @@ and extract the patched logits.</p>
                     <span class="n">save_resid_hook</span><span class="p">,</span>
                     <span class="n">cache</span><span class="o">=</span><span class="n">cache</span><span class="p">,</span>
                     <span class="n">cache_key</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;resid_in_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">token_index</span><span class="o">=</span><span class="n">token_index</span><span class="p">,</span>
+                <span class="p">),</span>
+            <span class="p">}</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_config</span><span class="o">.</span><span class="n">num_hidden_layers</span><span class="p">)</span>
+        <span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">extraction_config</span><span class="o">.</span><span class="n">extract_resid_in_post_layernorm</span><span class="p">:</span>
+        <span class="n">hooks</span> <span class="o">+=</span> <span class="p">[</span>
+            <span class="p">{</span>
+                <span class="s2">&quot;component&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_config</span><span class="o">.</span><span class="n">residual_stream_input_post_layernorm_hook_name</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                    <span class="n">i</span>
+                <span class="p">),</span>
+                <span class="s2">&quot;intervention&quot;</span><span class="p">:</span> <span class="n">partial</span><span class="p">(</span>
+                    <span class="n">save_resid_hook</span><span class="p">,</span>
+                    <span class="n">cache</span><span class="o">=</span><span class="n">cache</span><span class="p">,</span>
+                    <span class="n">cache_key</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;resid_in_post_layernorm_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
                     <span class="n">token_index</span><span class="o">=</span><span class="n">token_index</span><span class="p">,</span>
                 <span class="p">),</span>
             <span class="p">}</span>
@@ -5766,17 +5952,17 @@ and extract the patched logits.</p>
 
             <details class="quote">
               <summary>Source code in <code>easyroutine/interpretability/hooked_model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">289</span>
-<span class="normal">290</span>
-<span class="normal">291</span>
-<span class="normal">292</span>
-<span class="normal">293</span>
-<span class="normal">294</span>
-<span class="normal">295</span>
-<span class="normal">296</span>
-<span class="normal">297</span>
-<span class="normal">298</span>
-<span class="normal">299</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">device</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">323</span>
+<span class="normal">324</span>
+<span class="normal">325</span>
+<span class="normal">326</span>
+<span class="normal">327</span>
+<span class="normal">328</span>
+<span class="normal">329</span>
+<span class="normal">330</span>
+<span class="normal">331</span>
+<span class="normal">332</span>
+<span class="normal">333</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">device</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Return the device of the model. If the model is in multiple devices, it will return the first device</span>
 
@@ -5808,11 +5994,11 @@ and extract the patched logits.</p>
 
             <details class="quote">
               <summary>Source code in <code>easyroutine/interpretability/hooked_model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">283</span>
-<span class="normal">284</span>
-<span class="normal">285</span>
-<span class="normal">286</span>
-<span class="normal">287</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">eval</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">317</span>
+<span class="normal">318</span>
+<span class="normal">319</span>
+<span class="normal">320</span>
+<span class="normal">321</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">eval</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Set the model in evaluation mode</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -5961,66 +6147,7 @@ and extract the patched logits.</p>
 
             <details class="quote">
               <summary>Source code in <code>easyroutine/interpretability/hooked_model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1009</span>
-<span class="normal">1010</span>
-<span class="normal">1011</span>
-<span class="normal">1012</span>
-<span class="normal">1013</span>
-<span class="normal">1014</span>
-<span class="normal">1015</span>
-<span class="normal">1016</span>
-<span class="normal">1017</span>
-<span class="normal">1018</span>
-<span class="normal">1019</span>
-<span class="normal">1020</span>
-<span class="normal">1021</span>
-<span class="normal">1022</span>
-<span class="normal">1023</span>
-<span class="normal">1024</span>
-<span class="normal">1025</span>
-<span class="normal">1026</span>
-<span class="normal">1027</span>
-<span class="normal">1028</span>
-<span class="normal">1029</span>
-<span class="normal">1030</span>
-<span class="normal">1031</span>
-<span class="normal">1032</span>
-<span class="normal">1033</span>
-<span class="normal">1034</span>
-<span class="normal">1035</span>
-<span class="normal">1036</span>
-<span class="normal">1037</span>
-<span class="normal">1038</span>
-<span class="normal">1039</span>
-<span class="normal">1040</span>
-<span class="normal">1041</span>
-<span class="normal">1042</span>
-<span class="normal">1043</span>
-<span class="normal">1044</span>
-<span class="normal">1045</span>
-<span class="normal">1046</span>
-<span class="normal">1047</span>
-<span class="normal">1048</span>
-<span class="normal">1049</span>
-<span class="normal">1050</span>
-<span class="normal">1051</span>
-<span class="normal">1052</span>
-<span class="normal">1053</span>
-<span class="normal">1054</span>
-<span class="normal">1055</span>
-<span class="normal">1056</span>
-<span class="normal">1057</span>
-<span class="normal">1058</span>
-<span class="normal">1059</span>
-<span class="normal">1060</span>
-<span class="normal">1061</span>
-<span class="normal">1062</span>
-<span class="normal">1063</span>
-<span class="normal">1064</span>
-<span class="normal">1065</span>
-<span class="normal">1066</span>
-<span class="normal">1067</span>
-<span class="normal">1068</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1068</span>
 <span class="normal">1069</span>
 <span class="normal">1070</span>
 <span class="normal">1071</span>
@@ -6046,7 +6173,66 @@ and extract the patched logits.</p>
 <span class="normal">1091</span>
 <span class="normal">1092</span>
 <span class="normal">1093</span>
-<span class="normal">1094</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">()</span>
+<span class="normal">1094</span>
+<span class="normal">1095</span>
+<span class="normal">1096</span>
+<span class="normal">1097</span>
+<span class="normal">1098</span>
+<span class="normal">1099</span>
+<span class="normal">1100</span>
+<span class="normal">1101</span>
+<span class="normal">1102</span>
+<span class="normal">1103</span>
+<span class="normal">1104</span>
+<span class="normal">1105</span>
+<span class="normal">1106</span>
+<span class="normal">1107</span>
+<span class="normal">1108</span>
+<span class="normal">1109</span>
+<span class="normal">1110</span>
+<span class="normal">1111</span>
+<span class="normal">1112</span>
+<span class="normal">1113</span>
+<span class="normal">1114</span>
+<span class="normal">1115</span>
+<span class="normal">1116</span>
+<span class="normal">1117</span>
+<span class="normal">1118</span>
+<span class="normal">1119</span>
+<span class="normal">1120</span>
+<span class="normal">1121</span>
+<span class="normal">1122</span>
+<span class="normal">1123</span>
+<span class="normal">1124</span>
+<span class="normal">1125</span>
+<span class="normal">1126</span>
+<span class="normal">1127</span>
+<span class="normal">1128</span>
+<span class="normal">1129</span>
+<span class="normal">1130</span>
+<span class="normal">1131</span>
+<span class="normal">1132</span>
+<span class="normal">1133</span>
+<span class="normal">1134</span>
+<span class="normal">1135</span>
+<span class="normal">1136</span>
+<span class="normal">1137</span>
+<span class="normal">1138</span>
+<span class="normal">1139</span>
+<span class="normal">1140</span>
+<span class="normal">1141</span>
+<span class="normal">1142</span>
+<span class="normal">1143</span>
+<span class="normal">1144</span>
+<span class="normal">1145</span>
+<span class="normal">1146</span>
+<span class="normal">1147</span>
+<span class="normal">1148</span>
+<span class="normal">1149</span>
+<span class="normal">1150</span>
+<span class="normal">1151</span>
+<span class="normal">1152</span>
+<span class="normal">1153</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">()</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">extract_cache</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">dataloader</span><span class="p">,</span>
@@ -6119,7 +6305,7 @@ and extract the patched logits.</p>
         <span class="n">all_cache</span><span class="o">.</span><span class="n">cat</span><span class="p">(</span><span class="n">cache</span><span class="p">)</span>
 
         <span class="k">del</span> <span class="n">cache</span>
-        <span class="n">inputs</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">inputs</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+        <span class="n">inputs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_handler</span><span class="o">.</span><span class="n">prepare_inputs</span><span class="p">(</span><span class="n">batch</span><span class="p">,</span> <span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
         <span class="k">del</span> <span class="n">inputs</span>
         <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">empty_cache</span><span class="p">()</span>
 
@@ -6358,60 +6544,7 @@ and extract the patched logits.</p>
 
             <details class="quote">
               <summary>Source code in <code>easyroutine/interpretability/hooked_model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">746</span>
-<span class="normal">747</span>
-<span class="normal">748</span>
-<span class="normal">749</span>
-<span class="normal">750</span>
-<span class="normal">751</span>
-<span class="normal">752</span>
-<span class="normal">753</span>
-<span class="normal">754</span>
-<span class="normal">755</span>
-<span class="normal">756</span>
-<span class="normal">757</span>
-<span class="normal">758</span>
-<span class="normal">759</span>
-<span class="normal">760</span>
-<span class="normal">761</span>
-<span class="normal">762</span>
-<span class="normal">763</span>
-<span class="normal">764</span>
-<span class="normal">765</span>
-<span class="normal">766</span>
-<span class="normal">767</span>
-<span class="normal">768</span>
-<span class="normal">769</span>
-<span class="normal">770</span>
-<span class="normal">771</span>
-<span class="normal">772</span>
-<span class="normal">773</span>
-<span class="normal">774</span>
-<span class="normal">775</span>
-<span class="normal">776</span>
-<span class="normal">777</span>
-<span class="normal">778</span>
-<span class="normal">779</span>
-<span class="normal">780</span>
-<span class="normal">781</span>
-<span class="normal">782</span>
-<span class="normal">783</span>
-<span class="normal">784</span>
-<span class="normal">785</span>
-<span class="normal">786</span>
-<span class="normal">787</span>
-<span class="normal">788</span>
-<span class="normal">789</span>
-<span class="normal">790</span>
-<span class="normal">791</span>
-<span class="normal">792</span>
-<span class="normal">793</span>
-<span class="normal">794</span>
-<span class="normal">795</span>
-<span class="normal">796</span>
-<span class="normal">797</span>
-<span class="normal">798</span>
-<span class="normal">799</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">799</span>
 <span class="normal">800</span>
 <span class="normal">801</span>
 <span class="normal">802</span>
@@ -6469,7 +6602,56 @@ and extract the patched logits.</p>
 <span class="normal">854</span>
 <span class="normal">855</span>
 <span class="normal">856</span>
-<span class="normal">857</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">()</span>
+<span class="normal">857</span>
+<span class="normal">858</span>
+<span class="normal">859</span>
+<span class="normal">860</span>
+<span class="normal">861</span>
+<span class="normal">862</span>
+<span class="normal">863</span>
+<span class="normal">864</span>
+<span class="normal">865</span>
+<span class="normal">866</span>
+<span class="normal">867</span>
+<span class="normal">868</span>
+<span class="normal">869</span>
+<span class="normal">870</span>
+<span class="normal">871</span>
+<span class="normal">872</span>
+<span class="normal">873</span>
+<span class="normal">874</span>
+<span class="normal">875</span>
+<span class="normal">876</span>
+<span class="normal">877</span>
+<span class="normal">878</span>
+<span class="normal">879</span>
+<span class="normal">880</span>
+<span class="normal">881</span>
+<span class="normal">882</span>
+<span class="normal">883</span>
+<span class="normal">884</span>
+<span class="normal">885</span>
+<span class="normal">886</span>
+<span class="normal">887</span>
+<span class="normal">888</span>
+<span class="normal">889</span>
+<span class="normal">890</span>
+<span class="normal">891</span>
+<span class="normal">892</span>
+<span class="normal">893</span>
+<span class="normal">894</span>
+<span class="normal">895</span>
+<span class="normal">896</span>
+<span class="normal">897</span>
+<span class="normal">898</span>
+<span class="normal">899</span>
+<span class="normal">900</span>
+<span class="normal">901</span>
+<span class="normal">902</span>
+<span class="normal">903</span>
+<span class="normal">904</span>
+<span class="normal">905</span>
+<span class="normal">906</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">()</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">inputs</span><span class="p">,</span>
@@ -6506,10 +6688,6 @@ and extract the patched logits.</p>
 <span class="sd">        &gt;&gt;&gt; model.forward(inputs, target_token_positions=[&quot;last&quot;], extract_resid_out=True)</span>
 <span class="sd">        {&#39;resid_out_0&#39;: tensor([[[0.1, 0.2, 0.3, 0.4]]], grad_fn=&lt;CopyBackwards&gt;), &#39;input_ids&#39;: tensor([[101, 1234, 1235, 102]]), &#39;mapping_index&#39;: {&#39;last&#39;: [0]}}</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">model_to_use</span> <span class="o">=</span> <span class="p">(</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">hf_language_model</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_language_model</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">hf_model</span>
-    <span class="p">)</span>
-    <span class="k">assert</span> <span class="n">model_to_use</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;Error: The model is not loaded&quot;</span>
 
     <span class="k">if</span> <span class="n">target_token_positions</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">extraction_config</span><span class="o">.</span><span class="n">is_not_empty</span><span class="p">():</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
@@ -6546,7 +6724,7 @@ and extract the patched logits.</p>
         <span class="n">inputs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">first_device</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">torch_dtype</span>
     <span class="p">)</span>
     <span class="c1"># forward pass</span>
-    <span class="n">output</span> <span class="o">=</span> <span class="n">model_to_use</span><span class="p">(</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hf_model</span><span class="p">(</span>
         <span class="o">**</span><span class="n">inputs</span><span class="p">,</span>
         <span class="c1"># output_original_output=True,</span>
         <span class="c1"># output_attentions=extract_attn_pattern,</span>
@@ -6616,70 +6794,70 @@ Returns:
 
             <details class="quote">
               <summary>Source code in <code>easyroutine/interpretability/hooked_model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 944</span>
-<span class="normal"> 945</span>
-<span class="normal"> 946</span>
-<span class="normal"> 947</span>
-<span class="normal"> 948</span>
-<span class="normal"> 949</span>
-<span class="normal"> 950</span>
-<span class="normal"> 951</span>
-<span class="normal"> 952</span>
-<span class="normal"> 953</span>
-<span class="normal"> 954</span>
-<span class="normal"> 955</span>
-<span class="normal"> 956</span>
-<span class="normal"> 957</span>
-<span class="normal"> 958</span>
-<span class="normal"> 959</span>
-<span class="normal"> 960</span>
-<span class="normal"> 961</span>
-<span class="normal"> 962</span>
-<span class="normal"> 963</span>
-<span class="normal"> 964</span>
-<span class="normal"> 965</span>
-<span class="normal"> 966</span>
-<span class="normal"> 967</span>
-<span class="normal"> 968</span>
-<span class="normal"> 969</span>
-<span class="normal"> 970</span>
-<span class="normal"> 971</span>
-<span class="normal"> 972</span>
-<span class="normal"> 973</span>
-<span class="normal"> 974</span>
-<span class="normal"> 975</span>
-<span class="normal"> 976</span>
-<span class="normal"> 977</span>
-<span class="normal"> 978</span>
-<span class="normal"> 979</span>
-<span class="normal"> 980</span>
-<span class="normal"> 981</span>
-<span class="normal"> 982</span>
-<span class="normal"> 983</span>
-<span class="normal"> 984</span>
-<span class="normal"> 985</span>
-<span class="normal"> 986</span>
-<span class="normal"> 987</span>
-<span class="normal"> 988</span>
-<span class="normal"> 989</span>
-<span class="normal"> 990</span>
-<span class="normal"> 991</span>
-<span class="normal"> 992</span>
-<span class="normal"> 993</span>
-<span class="normal"> 994</span>
-<span class="normal"> 995</span>
-<span class="normal"> 996</span>
-<span class="normal"> 997</span>
-<span class="normal"> 998</span>
-<span class="normal"> 999</span>
-<span class="normal">1000</span>
-<span class="normal">1001</span>
-<span class="normal">1002</span>
-<span class="normal">1003</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1003</span>
 <span class="normal">1004</span>
 <span class="normal">1005</span>
 <span class="normal">1006</span>
-<span class="normal">1007</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">()</span>
+<span class="normal">1007</span>
+<span class="normal">1008</span>
+<span class="normal">1009</span>
+<span class="normal">1010</span>
+<span class="normal">1011</span>
+<span class="normal">1012</span>
+<span class="normal">1013</span>
+<span class="normal">1014</span>
+<span class="normal">1015</span>
+<span class="normal">1016</span>
+<span class="normal">1017</span>
+<span class="normal">1018</span>
+<span class="normal">1019</span>
+<span class="normal">1020</span>
+<span class="normal">1021</span>
+<span class="normal">1022</span>
+<span class="normal">1023</span>
+<span class="normal">1024</span>
+<span class="normal">1025</span>
+<span class="normal">1026</span>
+<span class="normal">1027</span>
+<span class="normal">1028</span>
+<span class="normal">1029</span>
+<span class="normal">1030</span>
+<span class="normal">1031</span>
+<span class="normal">1032</span>
+<span class="normal">1033</span>
+<span class="normal">1034</span>
+<span class="normal">1035</span>
+<span class="normal">1036</span>
+<span class="normal">1037</span>
+<span class="normal">1038</span>
+<span class="normal">1039</span>
+<span class="normal">1040</span>
+<span class="normal">1041</span>
+<span class="normal">1042</span>
+<span class="normal">1043</span>
+<span class="normal">1044</span>
+<span class="normal">1045</span>
+<span class="normal">1046</span>
+<span class="normal">1047</span>
+<span class="normal">1048</span>
+<span class="normal">1049</span>
+<span class="normal">1050</span>
+<span class="normal">1051</span>
+<span class="normal">1052</span>
+<span class="normal">1053</span>
+<span class="normal">1054</span>
+<span class="normal">1055</span>
+<span class="normal">1056</span>
+<span class="normal">1057</span>
+<span class="normal">1058</span>
+<span class="normal">1059</span>
+<span class="normal">1060</span>
+<span class="normal">1061</span>
+<span class="normal">1062</span>
+<span class="normal">1063</span>
+<span class="normal">1064</span>
+<span class="normal">1065</span>
+<span class="normal">1066</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">()</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">generate</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">inputs</span><span class="p">,</span>
@@ -6824,21 +7002,21 @@ Returns:
 
             <details class="quote">
               <summary>Source code in <code>easyroutine/interpretability/hooked_model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">882</span>
-<span class="normal">883</span>
-<span class="normal">884</span>
-<span class="normal">885</span>
-<span class="normal">886</span>
-<span class="normal">887</span>
-<span class="normal">888</span>
-<span class="normal">889</span>
-<span class="normal">890</span>
-<span class="normal">891</span>
-<span class="normal">892</span>
-<span class="normal">893</span>
-<span class="normal">894</span>
-<span class="normal">895</span>
-<span class="normal">896</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_module_from_string</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">component</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">931</span>
+<span class="normal">932</span>
+<span class="normal">933</span>
+<span class="normal">934</span>
+<span class="normal">935</span>
+<span class="normal">936</span>
+<span class="normal">937</span>
+<span class="normal">938</span>
+<span class="normal">939</span>
+<span class="normal">940</span>
+<span class="normal">941</span>
+<span class="normal">942</span>
+<span class="normal">943</span>
+<span class="normal">944</span>
+<span class="normal">945</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_module_from_string</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">component</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Return a module from the model given the string of the module.</span>
 
@@ -6896,19 +7074,19 @@ Returns:
 
             <details class="quote">
               <summary>Source code in <code>easyroutine/interpretability/hooked_model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">269</span>
-<span class="normal">270</span>
-<span class="normal">271</span>
-<span class="normal">272</span>
-<span class="normal">273</span>
-<span class="normal">274</span>
-<span class="normal">275</span>
-<span class="normal">276</span>
-<span class="normal">277</span>
-<span class="normal">278</span>
-<span class="normal">279</span>
-<span class="normal">280</span>
-<span class="normal">281</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_processor</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">303</span>
+<span class="normal">304</span>
+<span class="normal">305</span>
+<span class="normal">306</span>
+<span class="normal">307</span>
+<span class="normal">308</span>
+<span class="normal">309</span>
+<span class="normal">310</span>
+<span class="normal">311</span>
+<span class="normal">312</span>
+<span class="normal">313</span>
+<span class="normal">314</span>
+<span class="normal">315</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_processor</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Return the processor of the model (None if the model does not have a processor, i.e. text only model)</span>
 
@@ -6964,21 +7142,21 @@ Returns:
 
             <details class="quote">
               <summary>Source code in <code>easyroutine/interpretability/hooked_model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">253</span>
-<span class="normal">254</span>
-<span class="normal">255</span>
-<span class="normal">256</span>
-<span class="normal">257</span>
-<span class="normal">258</span>
-<span class="normal">259</span>
-<span class="normal">260</span>
-<span class="normal">261</span>
-<span class="normal">262</span>
-<span class="normal">263</span>
-<span class="normal">264</span>
-<span class="normal">265</span>
-<span class="normal">266</span>
-<span class="normal">267</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_text_tokenizer</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">287</span>
+<span class="normal">288</span>
+<span class="normal">289</span>
+<span class="normal">290</span>
+<span class="normal">291</span>
+<span class="normal">292</span>
+<span class="normal">293</span>
+<span class="normal">294</span>
+<span class="normal">295</span>
+<span class="normal">296</span>
+<span class="normal">297</span>
+<span class="normal">298</span>
+<span class="normal">299</span>
+<span class="normal">300</span>
+<span class="normal">301</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_text_tokenizer</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    If the tokenizer is a processor, return just the tokenizer. If the tokenizer is a tokenizer, return the tokenizer</span>
 
@@ -7093,31 +7271,31 @@ def hook_function(module, input, output):
 
             <details class="quote">
               <summary>Source code in <code>easyroutine/interpretability/hooked_model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">301</span>
-<span class="normal">302</span>
-<span class="normal">303</span>
-<span class="normal">304</span>
-<span class="normal">305</span>
-<span class="normal">306</span>
-<span class="normal">307</span>
-<span class="normal">308</span>
-<span class="normal">309</span>
-<span class="normal">310</span>
-<span class="normal">311</span>
-<span class="normal">312</span>
-<span class="normal">313</span>
-<span class="normal">314</span>
-<span class="normal">315</span>
-<span class="normal">316</span>
-<span class="normal">317</span>
-<span class="normal">318</span>
-<span class="normal">319</span>
-<span class="normal">320</span>
-<span class="normal">321</span>
-<span class="normal">322</span>
-<span class="normal">323</span>
-<span class="normal">324</span>
-<span class="normal">325</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">register_forward_hook</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">component</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">hook_function</span><span class="p">:</span> <span class="n">Callable</span><span class="p">):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">335</span>
+<span class="normal">336</span>
+<span class="normal">337</span>
+<span class="normal">338</span>
+<span class="normal">339</span>
+<span class="normal">340</span>
+<span class="normal">341</span>
+<span class="normal">342</span>
+<span class="normal">343</span>
+<span class="normal">344</span>
+<span class="normal">345</span>
+<span class="normal">346</span>
+<span class="normal">347</span>
+<span class="normal">348</span>
+<span class="normal">349</span>
+<span class="normal">350</span>
+<span class="normal">351</span>
+<span class="normal">352</span>
+<span class="normal">353</span>
+<span class="normal">354</span>
+<span class="normal">355</span>
+<span class="normal">356</span>
+<span class="normal">357</span>
+<span class="normal">358</span>
+<span class="normal">359</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">register_forward_hook</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">component</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">hook_function</span><span class="p">:</span> <span class="n">Callable</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Add a new hook to the model. The hook will be called in the forward pass of the model.</span>
 
@@ -7163,12 +7341,12 @@ def hook_function(module, input, output):
 
             <details class="quote">
               <summary>Source code in <code>easyroutine/interpretability/hooked_model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">937</span>
-<span class="normal">938</span>
-<span class="normal">939</span>
-<span class="normal">940</span>
-<span class="normal">941</span>
-<span class="normal">942</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">remove_hooks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hook_handlers</span><span class="p">):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 996</span>
+<span class="normal"> 997</span>
+<span class="normal"> 998</span>
+<span class="normal"> 999</span>
+<span class="normal">1000</span>
+<span class="normal">1001</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">remove_hooks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hook_handlers</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Remove all the hooks from the model</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -7249,44 +7427,54 @@ def hook_function(module, input, output):
 
             <details class="quote">
               <summary>Source code in <code>easyroutine/interpretability/hooked_model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">898</span>
-<span class="normal">899</span>
-<span class="normal">900</span>
-<span class="normal">901</span>
-<span class="normal">902</span>
-<span class="normal">903</span>
-<span class="normal">904</span>
-<span class="normal">905</span>
-<span class="normal">906</span>
-<span class="normal">907</span>
-<span class="normal">908</span>
-<span class="normal">909</span>
-<span class="normal">910</span>
-<span class="normal">911</span>
-<span class="normal">912</span>
-<span class="normal">913</span>
-<span class="normal">914</span>
-<span class="normal">915</span>
-<span class="normal">916</span>
-<span class="normal">917</span>
-<span class="normal">918</span>
-<span class="normal">919</span>
-<span class="normal">920</span>
-<span class="normal">921</span>
-<span class="normal">922</span>
-<span class="normal">923</span>
-<span class="normal">924</span>
-<span class="normal">925</span>
-<span class="normal">926</span>
-<span class="normal">927</span>
-<span class="normal">928</span>
-<span class="normal">929</span>
-<span class="normal">930</span>
-<span class="normal">931</span>
-<span class="normal">932</span>
-<span class="normal">933</span>
-<span class="normal">934</span>
-<span class="normal">935</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">set_hooks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hooks</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">947</span>
+<span class="normal">948</span>
+<span class="normal">949</span>
+<span class="normal">950</span>
+<span class="normal">951</span>
+<span class="normal">952</span>
+<span class="normal">953</span>
+<span class="normal">954</span>
+<span class="normal">955</span>
+<span class="normal">956</span>
+<span class="normal">957</span>
+<span class="normal">958</span>
+<span class="normal">959</span>
+<span class="normal">960</span>
+<span class="normal">961</span>
+<span class="normal">962</span>
+<span class="normal">963</span>
+<span class="normal">964</span>
+<span class="normal">965</span>
+<span class="normal">966</span>
+<span class="normal">967</span>
+<span class="normal">968</span>
+<span class="normal">969</span>
+<span class="normal">970</span>
+<span class="normal">971</span>
+<span class="normal">972</span>
+<span class="normal">973</span>
+<span class="normal">974</span>
+<span class="normal">975</span>
+<span class="normal">976</span>
+<span class="normal">977</span>
+<span class="normal">978</span>
+<span class="normal">979</span>
+<span class="normal">980</span>
+<span class="normal">981</span>
+<span class="normal">982</span>
+<span class="normal">983</span>
+<span class="normal">984</span>
+<span class="normal">985</span>
+<span class="normal">986</span>
+<span class="normal">987</span>
+<span class="normal">988</span>
+<span class="normal">989</span>
+<span class="normal">990</span>
+<span class="normal">991</span>
+<span class="normal">992</span>
+<span class="normal">993</span>
+<span class="normal">994</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">set_hooks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hooks</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Set the hooks in the model</span>
 
@@ -7309,17 +7497,27 @@ def hook_function(module, input, output):
         <span class="n">last_module</span> <span class="o">=</span> <span class="n">component</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
         <span class="c1"># now remove the last module from the component string</span>
         <span class="n">component</span> <span class="o">=</span> <span class="n">component</span><span class="p">[:</span> <span class="o">-</span><span class="nb">len</span><span class="p">(</span><span class="n">last_module</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
-
+        <span class="c1"># check if the component exists in the model</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">assert_module_exists</span><span class="p">(</span><span class="n">component</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">. Probably the module </span><span class="si">{</span><span class="n">component</span><span class="si">}</span><span class="s2"> do not exists in the model. If the module is the attention_matrix_hook, try callig HookedModel.set_custom_hooks() or setting attn_implementation == &#39;custom_eager&#39;.  Now we will skip the hook for the component </span><span class="si">{</span><span class="n">component</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">std_out</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">continue</span>
         <span class="k">if</span> <span class="n">last_module</span> <span class="o">==</span> <span class="s2">&quot;input&quot;</span><span class="p">:</span>
             <span class="n">hook_handlers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">get_module_by_path</span><span class="p">(</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">hf_model</span><span class="p">,</span> <span class="n">component</span>
-                <span class="p">)</span><span class="o">.</span><span class="n">register_forward_pre_hook</span><span class="p">(</span><span class="n">partial</span><span class="p">(</span><span class="n">hook_function</span><span class="p">,</span> <span class="n">output</span><span class="o">=</span><span class="kc">None</span><span class="p">))</span>
+                <span class="p">)</span><span class="o">.</span><span class="n">register_forward_pre_hook</span><span class="p">(</span>
+                    <span class="n">partial</span><span class="p">(</span><span class="n">hook_function</span><span class="p">,</span> <span class="n">output</span><span class="o">=</span><span class="kc">None</span><span class="p">),</span> <span class="n">with_kwargs</span><span class="o">=</span><span class="kc">True</span>
+                <span class="p">)</span>
             <span class="p">)</span>
         <span class="k">elif</span> <span class="n">last_module</span> <span class="o">==</span> <span class="s2">&quot;output&quot;</span><span class="p">:</span>
             <span class="n">hook_handlers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">get_module_by_path</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hf_model</span><span class="p">,</span> <span class="n">component</span><span class="p">)</span><span class="o">.</span><span class="n">register_forward_hook</span><span class="p">(</span>
-                    <span class="n">hook_function</span>
+                    <span class="n">hook_function</span><span class="p">,</span> <span class="n">with_kwargs</span><span class="o">=</span><span class="kc">True</span>
                 <span class="p">)</span>
             <span class="p">)</span>
 
@@ -7406,30 +7604,33 @@ def hook_function(module, input, output):
 
             <details class="quote">
               <summary>Source code in <code>easyroutine/interpretability/hooked_model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">327</span>
-<span class="normal">328</span>
-<span class="normal">329</span>
-<span class="normal">330</span>
-<span class="normal">331</span>
-<span class="normal">332</span>
-<span class="normal">333</span>
-<span class="normal">334</span>
-<span class="normal">335</span>
-<span class="normal">336</span>
-<span class="normal">337</span>
-<span class="normal">338</span>
-<span class="normal">339</span>
-<span class="normal">340</span>
-<span class="normal">341</span>
-<span class="normal">342</span>
-<span class="normal">343</span>
-<span class="normal">344</span>
-<span class="normal">345</span>
-<span class="normal">346</span>
-<span class="normal">347</span>
-<span class="normal">348</span>
-<span class="normal">349</span>
-<span class="normal">350</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_string_tokens</span><span class="p">(</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">361</span>
+<span class="normal">362</span>
+<span class="normal">363</span>
+<span class="normal">364</span>
+<span class="normal">365</span>
+<span class="normal">366</span>
+<span class="normal">367</span>
+<span class="normal">368</span>
+<span class="normal">369</span>
+<span class="normal">370</span>
+<span class="normal">371</span>
+<span class="normal">372</span>
+<span class="normal">373</span>
+<span class="normal">374</span>
+<span class="normal">375</span>
+<span class="normal">376</span>
+<span class="normal">377</span>
+<span class="normal">378</span>
+<span class="normal">379</span>
+<span class="normal">380</span>
+<span class="normal">381</span>
+<span class="normal">382</span>
+<span class="normal">383</span>
+<span class="normal">384</span>
+<span class="normal">385</span>
+<span class="normal">386</span>
+<span class="normal">387</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_string_tokens</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">tokens</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">list</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span>
 <span class="p">):</span>
@@ -7448,7 +7649,10 @@ def hook_function(module, input, output):
 <span class="sd">        [&#39;[CLS]&#39;, &#39;hello&#39;, &#39;world&#39;, &#39;[SEP]&#39;]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tokens</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-        <span class="n">tokens</span> <span class="o">=</span> <span class="n">tokens</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">tokens</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">tokens</span> <span class="o">=</span> <span class="n">tokens</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">tokens</span> <span class="o">=</span> <span class="n">tokens</span><span class="o">.</span><span class="n">squeeze</span><span class="p">()</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
     <span class="n">string_tokens</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">for</span> <span class="n">tok</span> <span class="ow">in</span> <span class="n">tokens</span><span class="p">:</span>
         <span class="n">string_tokens</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hf_tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">tok</span><span class="p">))</span>  <span class="c1"># type: ignore</span>
@@ -7560,7 +7764,7 @@ def hook_function(module, input, output):
               </div>
             </td>
             <td>
-                  <code>&#39;eager&#39;</code>
+                  <code>&#39;custom_eager&#39;</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -7589,7 +7793,10 @@ def hook_function(module, input, output):
 
               <details class="quote">
                 <summary>Source code in <code>easyroutine/interpretability/hooked_model.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">56</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">53</span>
+<span class="normal">54</span>
+<span class="normal">55</span>
+<span class="normal">56</span>
 <span class="normal">57</span>
 <span class="normal">58</span>
 <span class="normal">59</span>
@@ -7617,10 +7824,13 @@ def hook_function(module, input, output):
 <span class="sd">        attn_implementation (Literal[&quot;eager&quot;, &quot;flash_attention_2&quot;]): the implementation of the attention</span>
 <span class="sd">        batch_size (int): the batch size of the model. FOR NOW, ONLY BATCH SIZE 1 IS SUPPORTED. USE AT YOUR OWN RISK</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+
     <span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span>
     <span class="n">device_map</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;balanced&quot;</span><span class="p">,</span> <span class="s2">&quot;cuda&quot;</span><span class="p">,</span> <span class="s2">&quot;cpu&quot;</span><span class="p">,</span> <span class="s2">&quot;auto&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;balanced&quot;</span>
     <span class="n">torch_dtype</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span>
-    <span class="n">attn_implementation</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;eager&quot;</span><span class="p">,</span> <span class="s2">&quot;flash_attention_2&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;eager&quot;</span>
+    <span class="n">attn_implementation</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;eager&quot;</span><span class="p">,</span> <span class="s2">&quot;custom_eager&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s2">&quot;custom_eager&quot;</span>  <span class="c1"># TODO: add flash_attention_2 in custom module to support it</span>
+    <span class="p">)</span>
     <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span>
 </code></pre></div></td></tr></table></div>
               </details>

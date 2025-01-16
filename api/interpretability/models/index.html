@@ -14,7 +14,7 @@
         <link rel="prev" href="../hooks/">
       
       
-        <link rel="next" href="../token_index/">
+        <link rel="next" href="../module_wrapper/">
       
       
       <link rel="icon" href="../../../assets/images/favicon.png">
@@ -504,6 +504,27 @@
   
   
     <li class="md-nav__item">
+      <a href="../module_wrapper/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Module Wrapper
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../token_index/" class="md-nav__link">
         
   
@@ -728,6 +749,17 @@
             </td>
           </tr>
           <tr class="doc-section-item">
+            <td><code><span title="easyroutine.interpretability.models.ModelConfig.residual_stream_input_post_layernorm_hook_name">residual_stream_input_post_layernorm_hook_name</span></code></td>
+            <td>
+                  <code>str</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Name of the residual stream input post layer norm </p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
             <td><code><span title="easyroutine.interpretability.models.ModelConfig.attn_value_hook_name">attn_value_hook_name</span></code></td>
             <td>
                   <code>str</code>
@@ -922,7 +954,9 @@
 <span class="normal">61</span>
 <span class="normal">62</span>
 <span class="normal">63</span>
-<span class="normal">64</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span>
+<span class="normal">64</span>
+<span class="normal">65</span>
+<span class="normal">66</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">ModelConfig</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Configuration class for storing model specific parameters.</span>
@@ -931,6 +965,7 @@
 <span class="sd">        residual_stream_input_hook_name (str): Name of the residual stream torch module where attach the hook</span>
 <span class="sd">        residual_stream_hook_name (str): Name of the residual stram torch module where attach the hook</span>
 <span class="sd">        intermediate_stream_hook_name (str): Name of the intermediate stream torch module where attach the hook</span>
+<span class="sd">        residual_stream_input_post_layernorm_hook_name (str): Name of the residual stream input post layer norm </span>
 <span class="sd">        attn_value_hook_name (str): Name of the attention value torch module where attach the hook</span>
 <span class="sd">        attn_in_hook_name (str): Name of the attention input torch module where attach the hook</span>
 <span class="sd">        attn_out_hook_name (str): Name of the attention output torch module where attach the hook</span>
@@ -950,6 +985,7 @@
     <span class="n">residual_stream_input_hook_name</span><span class="p">:</span> <span class="nb">str</span> <span class="c1"># Name of the residual stream torch module where attach the hook</span>
     <span class="n">residual_stream_hook_name</span><span class="p">:</span> <span class="nb">str</span> <span class="c1"># Name of the residual stram torch module where attach the hook</span>
     <span class="n">intermediate_stream_hook_name</span><span class="p">:</span> <span class="nb">str</span> <span class="c1"># Name of the intermediate stream torch module where attach the hook</span>
+    <span class="n">residual_stream_input_post_layernorm_hook_name</span><span class="p">:</span> <span class="nb">str</span> <span class="c1"># Name of the residual stream input post layernorm torch module where attach the hook</span>
     <span class="n">attn_value_hook_name</span><span class="p">:</span> <span class="nb">str</span> <span class="c1"># Name of the attention value torch module where attach the hook</span>
     <span class="n">attn_in_hook_name</span><span class="p">:</span> <span class="nb">str</span> <span class="c1"># Name of the attention input torch module where attach the hook</span>
     <span class="n">attn_out_hook_name</span><span class="p">:</span> <span class="nb">str</span> <span class="c1"># Name of the attention output torch module where attach the hook</span>
@@ -1011,6 +1047,7 @@
 <ul>
 <li><strong>Chameleon-7b</strong>: A 7-billion parameter model for general-purpose tasks.</li>
 <li><strong>Chameleon-30b</strong>: A larger version of the Chameleon series with 30 billion parameters.</li>
+<li><strong>llava-hf/llava-v1.6-mistral-7b-hf</strong>: A 7-billion parameter model for multimodal tasks.</li>
 <li><strong>Pixtral-12b</strong>: Optimized for image-to-text tasks.</li>
 <li><strong>Emu3-Chat</strong>: Fine-tuned for conversational AI.</li>
 <li><strong>Emu3-Gen</strong>: Specialized in text generation tasks.</li>
@@ -1032,9 +1069,7 @@
 
               <details class="quote">
                 <summary>Source code in <code>easyroutine/interpretability/models.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 70</span>
-<span class="normal"> 71</span>
-<span class="normal"> 72</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 72</span>
 <span class="normal"> 73</span>
 <span class="normal"> 74</span>
 <span class="normal"> 75</span>
@@ -1151,7 +1186,11 @@
 <span class="normal">186</span>
 <span class="normal">187</span>
 <span class="normal">188</span>
-<span class="normal">189</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ModelFactory</span><span class="p">:</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ModelFactory</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    This class is a factory to load the model and the processor. It supports the following models:</span>
 
@@ -1160,6 +1199,7 @@
 
 <span class="sd">        - **Chameleon-7b**: A 7-billion parameter model for general-purpose tasks.</span>
 <span class="sd">        - **Chameleon-30b**: A larger version of the Chameleon series with 30 billion parameters.</span>
+<span class="sd">        - **llava-hf/llava-v1.6-mistral-7b-hf**: A 7-billion parameter model for multimodal tasks.</span>
 <span class="sd">        - **Pixtral-12b**: Optimized for image-to-text tasks.</span>
 <span class="sd">        - **Emu3-Chat**: Fine-tuned for conversational AI.</span>
 <span class="sd">        - **Emu3-Gen**: Specialized in text generation tasks.</span>
@@ -1194,7 +1234,7 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="n">attn_implementation</span> <span class="o">!=</span> <span class="s2">&quot;eager&quot;</span><span class="p">:</span>
             <span class="n">LambdaLogger</span><span class="o">.</span><span class="n">log</span><span class="p">(</span>
-                <span class="s2">&quot;Using an attention type different from eager could have unexpected behavior in some experiments!&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;Using an attention type different from eager or custom eager could have unexpected behavior in some experiments!&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;WARNING&quot;</span><span class="p">,</span>
             <span class="p">)</span>
 
@@ -1206,7 +1246,7 @@
                 <span class="n">device_map</span><span class="o">=</span><span class="n">device_map</span><span class="p">,</span>
                 <span class="n">attn_implementation</span><span class="o">=</span><span class="n">attn_implementation</span><span class="p">,</span>
             <span class="p">)</span>
-            <span class="n">model_config</span> <span class="o">=</span> <span class="n">ModelFactory</span><span class="o">.</span><span class="n">_create_model_config</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;model.&quot;</span><span class="p">)</span>
+            <span class="n">model_config</span> <span class="o">=</span> <span class="n">ModelFactory</span><span class="o">.</span><span class="n">_create_model_config</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;model.&quot;</span><span class="p">)</span>
 
         <span class="k">elif</span> <span class="n">model_name</span> <span class="ow">in</span> <span class="p">[</span>
             <span class="s2">&quot;mistral-community/pixtral-12b&quot;</span><span class="p">,</span>
@@ -1229,34 +1269,35 @@
             <span class="k">else</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Unsupported model_name&quot;</span><span class="p">)</span>
             <span class="n">language_model</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">language_model</span>
-            <span class="n">model_config</span> <span class="o">=</span> <span class="n">ModelFactory</span><span class="o">.</span><span class="n">_create_model_config</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;language_model.&quot;</span><span class="p">)</span>
+            <span class="n">model_config</span> <span class="o">=</span> <span class="n">ModelFactory</span><span class="o">.</span><span class="n">_create_model_config</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">language_model</span><span class="o">.</span><span class="n">config</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;language_model.model.&quot;</span><span class="p">)</span>
 
         <span class="k">elif</span> <span class="n">model_name</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;Emu3-Chat&quot;</span><span class="p">,</span> <span class="s2">&quot;Emu3-Gen&quot;</span><span class="p">,</span> <span class="s2">&quot;Emu3-Stage1&quot;</span><span class="p">]:</span>
             <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Emu3 model not implemented yet&quot;</span><span class="p">)</span>
 
         <span class="k">elif</span> <span class="n">model_name</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;hf-internal-testing/tiny-random-LlamaForCausalLM&quot;</span><span class="p">]:</span>
             <span class="n">model</span> <span class="o">=</span> <span class="n">LlamaForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span>
-                <span class="n">model_name</span><span class="p">,</span> <span class="n">torch_dtype</span><span class="o">=</span><span class="n">torch_dtype</span><span class="p">,</span> <span class="n">device_map</span><span class="o">=</span><span class="n">device_map</span>
+                <span class="n">model_name</span><span class="p">,</span> <span class="n">torch_dtype</span><span class="o">=</span><span class="n">torch_dtype</span><span class="p">,</span> <span class="n">device_map</span><span class="o">=</span><span class="n">device_map</span><span class="p">,</span> <span class="n">attn_implementation</span><span class="o">=</span><span class="n">attn_implementation</span>
             <span class="p">)</span>
-            <span class="n">model_config</span> <span class="o">=</span> <span class="n">ModelFactory</span><span class="o">.</span><span class="n">_create_model_config</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+            <span class="n">model_config</span> <span class="o">=</span> <span class="n">ModelFactory</span><span class="o">.</span><span class="n">_create_model_config</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
 
         <span class="k">elif</span> <span class="n">model_name</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;CohereForAI/aya-101&quot;</span><span class="p">]:</span>
             <span class="n">model</span> <span class="o">=</span> <span class="n">T5ForConditionalGeneration</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span>
-                <span class="n">model_name</span><span class="p">,</span> <span class="n">torch_dtype</span><span class="o">=</span><span class="n">torch_dtype</span><span class="p">,</span> <span class="n">device_map</span><span class="o">=</span><span class="n">device_map</span>
+                <span class="n">model_name</span><span class="p">,</span> <span class="n">torch_dtype</span><span class="o">=</span><span class="n">torch_dtype</span><span class="p">,</span> <span class="n">device_map</span><span class="o">=</span><span class="n">device_map</span><span class="p">,</span> <span class="n">attn_implementation</span><span class="o">=</span><span class="n">attn_implementation</span>
             <span class="p">)</span>
             <span class="n">language_model</span> <span class="o">=</span> <span class="kc">None</span>
-            <span class="n">model_config</span> <span class="o">=</span> <span class="n">ModelFactory</span><span class="o">.</span><span class="n">_create_model_config</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;encoder.&quot;</span><span class="p">)</span>
+            <span class="n">model_config</span> <span class="o">=</span> <span class="n">ModelFactory</span><span class="o">.</span><span class="n">_create_model_config</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;encoder.&quot;</span><span class="p">)</span>
 
         <span class="k">else</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Unsupported model_name&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">model</span><span class="p">,</span> <span class="n">language_model</span><span class="p">,</span> <span class="n">model_config</span>
 
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_create_model_config</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;model.&quot;</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_create_model_config</span><span class="p">(</span><span class="n">model_config</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;model.&quot;</span><span class="p">,):</span>
         <span class="k">return</span> <span class="n">ModelConfig</span><span class="p">(</span>
             <span class="n">residual_stream_input_hook_name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">layers[</span><span class="se">{{}}</span><span class="s2">].input&quot;</span><span class="p">,</span>
             <span class="n">residual_stream_hook_name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">layers[</span><span class="se">{{}}</span><span class="s2">].output&quot;</span><span class="p">,</span>
             <span class="n">intermediate_stream_hook_name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">layers[</span><span class="se">{{}}</span><span class="s2">].post_attention_layernorm.output&quot;</span><span class="p">,</span>
+            <span class="n">residual_stream_input_post_layernorm_hook_name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">layers[</span><span class="se">{{}}</span><span class="s2">].self_attn.input&quot;</span><span class="p">,</span>
             <span class="n">attn_value_hook_name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">layers[</span><span class="se">{{}}</span><span class="s2">].self_attn.v_proj.output&quot;</span><span class="p">,</span>
             <span class="n">attn_out_hook_name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">layers[</span><span class="se">{{}}</span><span class="s2">].self_attn.o_proj.output&quot;</span><span class="p">,</span>
             <span class="n">attn_in_hook_name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">layers[</span><span class="se">{{}}</span><span class="s2">].self_attn.input&quot;</span><span class="p">,</span>
@@ -1264,12 +1305,12 @@
             <span class="n">attn_out_proj_weight</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">layers[</span><span class="se">{{}}</span><span class="s2">].self_attn.o_proj.weight&quot;</span><span class="p">,</span>
             <span class="n">attn_out_proj_bias</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">layers[</span><span class="se">{{}}</span><span class="s2">].self_attn.o_proj.bias&quot;</span><span class="p">,</span>
             <span class="n">embed_tokens</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">embed_tokens.input&quot;</span><span class="p">,</span>
-            <span class="n">num_hidden_layers</span><span class="o">=</span><span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">num_hidden_layers</span><span class="p">,</span>
-            <span class="n">num_attention_heads</span><span class="o">=</span><span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">num_attention_heads</span><span class="p">,</span>
-            <span class="n">hidden_size</span><span class="o">=</span><span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">hidden_size</span><span class="p">,</span>
-            <span class="n">num_key_value_heads</span><span class="o">=</span><span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">num_key_value_heads</span><span class="p">,</span>
-            <span class="n">num_key_value_groups</span><span class="o">=</span><span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">num_attention_heads</span> <span class="o">//</span> <span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">num_key_value_heads</span><span class="p">,</span>
-            <span class="n">head_dim</span><span class="o">=</span><span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">hidden_size</span> <span class="o">//</span> <span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">num_attention_heads</span><span class="p">,</span>
+            <span class="n">num_hidden_layers</span><span class="o">=</span><span class="n">model_config</span><span class="o">.</span><span class="n">num_hidden_layers</span><span class="p">,</span>
+            <span class="n">num_attention_heads</span><span class="o">=</span><span class="n">model_config</span><span class="o">.</span><span class="n">num_attention_heads</span><span class="p">,</span>
+            <span class="n">hidden_size</span><span class="o">=</span><span class="n">model_config</span><span class="o">.</span><span class="n">hidden_size</span><span class="p">,</span>
+            <span class="n">num_key_value_heads</span><span class="o">=</span><span class="n">model_config</span><span class="o">.</span><span class="n">num_key_value_heads</span><span class="p">,</span>
+            <span class="n">num_key_value_groups</span><span class="o">=</span><span class="n">model_config</span><span class="o">.</span><span class="n">num_attention_heads</span> <span class="o">//</span> <span class="n">model_config</span><span class="o">.</span><span class="n">num_key_value_heads</span><span class="p">,</span>
+            <span class="n">head_dim</span><span class="o">=</span><span class="n">model_config</span><span class="o">.</span><span class="n">hidden_size</span> <span class="o">//</span> <span class="n">model_config</span><span class="o">.</span><span class="n">num_attention_heads</span><span class="p">,</span>
         <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
               </details>
@@ -1417,10 +1458,7 @@
 
             <details class="quote">
               <summary>Source code in <code>easyroutine/interpretability/models.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 91</span>
-<span class="normal"> 92</span>
-<span class="normal"> 93</span>
-<span class="normal"> 94</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 94</span>
 <span class="normal"> 95</span>
 <span class="normal"> 96</span>
 <span class="normal"> 97</span>
@@ -1494,7 +1532,10 @@
 <span class="normal">165</span>
 <span class="normal">166</span>
 <span class="normal">167</span>
-<span class="normal">168</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@staticmethod</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@staticmethod</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">load_model</span><span class="p">(</span>
     <span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">attn_implementation</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -1516,7 +1557,7 @@
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">attn_implementation</span> <span class="o">!=</span> <span class="s2">&quot;eager&quot;</span><span class="p">:</span>
         <span class="n">LambdaLogger</span><span class="o">.</span><span class="n">log</span><span class="p">(</span>
-            <span class="s2">&quot;Using an attention type different from eager could have unexpected behavior in some experiments!&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;Using an attention type different from eager or custom eager could have unexpected behavior in some experiments!&quot;</span><span class="p">,</span>
             <span class="s2">&quot;WARNING&quot;</span><span class="p">,</span>
         <span class="p">)</span>
 
@@ -1528,7 +1569,7 @@
             <span class="n">device_map</span><span class="o">=</span><span class="n">device_map</span><span class="p">,</span>
             <span class="n">attn_implementation</span><span class="o">=</span><span class="n">attn_implementation</span><span class="p">,</span>
         <span class="p">)</span>
-        <span class="n">model_config</span> <span class="o">=</span> <span class="n">ModelFactory</span><span class="o">.</span><span class="n">_create_model_config</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;model.&quot;</span><span class="p">)</span>
+        <span class="n">model_config</span> <span class="o">=</span> <span class="n">ModelFactory</span><span class="o">.</span><span class="n">_create_model_config</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;model.&quot;</span><span class="p">)</span>
 
     <span class="k">elif</span> <span class="n">model_name</span> <span class="ow">in</span> <span class="p">[</span>
         <span class="s2">&quot;mistral-community/pixtral-12b&quot;</span><span class="p">,</span>
@@ -1551,23 +1592,23 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Unsupported model_name&quot;</span><span class="p">)</span>
         <span class="n">language_model</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">language_model</span>
-        <span class="n">model_config</span> <span class="o">=</span> <span class="n">ModelFactory</span><span class="o">.</span><span class="n">_create_model_config</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;language_model.&quot;</span><span class="p">)</span>
+        <span class="n">model_config</span> <span class="o">=</span> <span class="n">ModelFactory</span><span class="o">.</span><span class="n">_create_model_config</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">language_model</span><span class="o">.</span><span class="n">config</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;language_model.model.&quot;</span><span class="p">)</span>
 
     <span class="k">elif</span> <span class="n">model_name</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;Emu3-Chat&quot;</span><span class="p">,</span> <span class="s2">&quot;Emu3-Gen&quot;</span><span class="p">,</span> <span class="s2">&quot;Emu3-Stage1&quot;</span><span class="p">]:</span>
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Emu3 model not implemented yet&quot;</span><span class="p">)</span>
 
     <span class="k">elif</span> <span class="n">model_name</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;hf-internal-testing/tiny-random-LlamaForCausalLM&quot;</span><span class="p">]:</span>
         <span class="n">model</span> <span class="o">=</span> <span class="n">LlamaForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span>
-            <span class="n">model_name</span><span class="p">,</span> <span class="n">torch_dtype</span><span class="o">=</span><span class="n">torch_dtype</span><span class="p">,</span> <span class="n">device_map</span><span class="o">=</span><span class="n">device_map</span>
+            <span class="n">model_name</span><span class="p">,</span> <span class="n">torch_dtype</span><span class="o">=</span><span class="n">torch_dtype</span><span class="p">,</span> <span class="n">device_map</span><span class="o">=</span><span class="n">device_map</span><span class="p">,</span> <span class="n">attn_implementation</span><span class="o">=</span><span class="n">attn_implementation</span>
         <span class="p">)</span>
-        <span class="n">model_config</span> <span class="o">=</span> <span class="n">ModelFactory</span><span class="o">.</span><span class="n">_create_model_config</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+        <span class="n">model_config</span> <span class="o">=</span> <span class="n">ModelFactory</span><span class="o">.</span><span class="n">_create_model_config</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
 
     <span class="k">elif</span> <span class="n">model_name</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;CohereForAI/aya-101&quot;</span><span class="p">]:</span>
         <span class="n">model</span> <span class="o">=</span> <span class="n">T5ForConditionalGeneration</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span>
-            <span class="n">model_name</span><span class="p">,</span> <span class="n">torch_dtype</span><span class="o">=</span><span class="n">torch_dtype</span><span class="p">,</span> <span class="n">device_map</span><span class="o">=</span><span class="n">device_map</span>
+            <span class="n">model_name</span><span class="p">,</span> <span class="n">torch_dtype</span><span class="o">=</span><span class="n">torch_dtype</span><span class="p">,</span> <span class="n">device_map</span><span class="o">=</span><span class="n">device_map</span><span class="p">,</span> <span class="n">attn_implementation</span><span class="o">=</span><span class="n">attn_implementation</span>
         <span class="p">)</span>
         <span class="n">language_model</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="n">model_config</span> <span class="o">=</span> <span class="n">ModelFactory</span><span class="o">.</span><span class="n">_create_model_config</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;encoder.&quot;</span><span class="p">)</span>
+        <span class="n">model_config</span> <span class="o">=</span> <span class="n">ModelFactory</span><span class="o">.</span><span class="n">_create_model_config</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;encoder.&quot;</span><span class="p">)</span>
 
     <span class="k">else</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Unsupported model_name&quot;</span><span class="p">)</span>
@@ -1609,11 +1650,7 @@
 
               <details class="quote">
                 <summary>Source code in <code>easyroutine/interpretability/models.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">192</span>
-<span class="normal">193</span>
-<span class="normal">194</span>
-<span class="normal">195</span>
-<span class="normal">196</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">196</span>
 <span class="normal">197</span>
 <span class="normal">198</span>
 <span class="normal">199</span>
@@ -1675,7 +1712,11 @@
 <span class="normal">255</span>
 <span class="normal">256</span>
 <span class="normal">257</span>
-<span class="normal">258</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">TokenizerFactory</span><span class="p">:</span>
+<span class="normal">258</span>
+<span class="normal">259</span>
+<span class="normal">260</span>
+<span class="normal">261</span>
+<span class="normal">262</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">TokenizerFactory</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    This class return the right tokenizer for the model. If the model is multimodal return is_a_process == True</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -1872,11 +1913,7 @@
 
             <details class="quote">
               <summary>Source code in <code>easyroutine/interpretability/models.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">196</span>
-<span class="normal">197</span>
-<span class="normal">198</span>
-<span class="normal">199</span>
-<span class="normal">200</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">200</span>
 <span class="normal">201</span>
 <span class="normal">202</span>
 <span class="normal">203</span>
@@ -1934,7 +1971,11 @@
 <span class="normal">255</span>
 <span class="normal">256</span>
 <span class="normal">257</span>
-<span class="normal">258</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@staticmethod</span>
+<span class="normal">258</span>
+<span class="normal">259</span>
+<span class="normal">260</span>
+<span class="normal">261</span>
+<span class="normal">262</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@staticmethod</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">load_tokenizer</span><span class="p">(</span><span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">torch_dtype</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">device_map</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Load the tokenizer based on the model name.</span>

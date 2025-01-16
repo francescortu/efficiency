@@ -451,6 +451,27 @@
   
   
     <li class="md-nav__item">
+      <a href="module_wrapper/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Module Wrapper
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="token_index/" class="md-nav__link">
         
   
@@ -534,16 +555,10 @@
 <p><code>easyroutine.interpretability</code> is the module that implement code for extract the hidden rappresentations of HuggingFace LLMs and intervening on the forward pass.</p>
 <h2 id="simple-tutorial">Simple Tutorial</h2>
 <pre><code class="language-python"># First we need to import the HookedModel and the config classes
-from easyroutine.interpretability import HookedModel, HookedModelConfig, ExtractionConfig
-
-# define the config for the hooked model
-config = HookedModelConfig(
-    model_name=&quot;mistral-community/pixtral-12b&quot;, # the model name
-    device_map = &quot;auto&quot;
-)
+from easyroutine.interpretability import HookedModel, ExtractionConfig
 
 # Then we can create the hooked model
-hooked_model = HookedModel(config)
+hooked_model = HookedModel.from_pretrained(model_name=&quot;mistral-community/pixtral-12b&quot;, device_map = &quot;auto&quot;)
 
 # Now let's define a simple dataset
 dataset = [

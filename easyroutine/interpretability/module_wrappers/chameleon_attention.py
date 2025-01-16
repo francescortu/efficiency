@@ -72,8 +72,9 @@ class ChameleonAttentionWrapper(BaseAttentionWrapper):
         self.q_norm = original_attention.q_norm
         self.k_norm = original_attention.k_norm
         self.o_proj = original_attention.o_proj
-        self.softmax = original_attention.softmax
+        # self.softmax = original_attention.softmax
         self.attention_dropout = original_attention.attention_dropout
+        self.training = original_attention.training
         self.layer_idx = original_attention.layer_idx
         self.num_heads = original_attention.num_heads
         self.num_key_value_heads = original_attention.num_key_value_heads
@@ -134,7 +135,7 @@ class ChameleonAttentionWrapper(BaseAttentionWrapper):
 
         # upcast attention to fp32
         # attn_weights = nn.functional.softmax(attn_weights, dim=-1).to(query_states.dtype)
-        attn_weights = self.softmax(attn_weights.to(torch.float32)).to(query_states.dtype)
+        attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query_states.dtype)
         attn_weights = nn.functional.dropout(attn_weights, p=self.attention_dropout, training=self.training)
         attn_weights = self.attention_matrix_hook(attn_weights)
         attn_output = torch.matmul(attn_weights, value_states)

@@ -45,10 +45,6 @@ from functools import partial
 import pandas as pd
 
 
-LambdaLogger.log(
-    "This implementation use a fork of the HuggingFace transformer library to perform some experiment. Be sure to have the right version of the library (pip install git+https://github.com/francescortu/transformers.git@easyroutine)",
-    level="WARNING",
-)
 
 # to avoid running out of shared memory
 # torch.multiprocessing.set_sharing_strategy("file_system")
@@ -58,7 +54,7 @@ LambdaLogger.log(
 class HookedModelConfig:
     """
     Configuration of the HookedModel
-    
+
     Arguments:
         model_name (str): the name of the model to load
         device_map (Literal["balanced", "cuda", "cpu", "auto"]): the device to use for the model
@@ -66,10 +62,13 @@ class HookedModelConfig:
         attn_implementation (Literal["eager", "flash_attention_2"]): the implementation of the attention
         batch_size (int): the batch size of the model. FOR NOW, ONLY BATCH SIZE 1 IS SUPPORTED. USE AT YOUR OWN RISK
     """
+
     model_name: str
     device_map: Literal["balanced", "cuda", "cpu", "auto"] = "balanced"
     torch_dtype: torch.dtype = torch.bfloat16
-    attn_implementation: Literal["eager", "custom_eager"] = "custom_eager" # TODO: add flash_attention_2 in custom module to support it
+    attn_implementation: Literal["eager", "custom_eager"] = (
+        "custom_eager"  # TODO: add flash_attention_2 in custom module to support it
+    )
     batch_size: int = 1
 
 
@@ -77,7 +76,7 @@ class HookedModelConfig:
 class ExtractionConfig:
     """
     Configuration of the extraction of the activations of the model. It store what activations you want to extract from the model.
-    
+
     Arguments:
         extract_resid_in (bool): if True, extract the input of the residual stream
         extract_resid_mid (bool): if True, extract the output of the intermediate stream
@@ -94,6 +93,7 @@ class ExtractionConfig:
         extract_avg (bool): if True, extract the average of the activations
         attn_heads (Union[list[dict], Literal["all"]]): list of dictionaries with the layer and head to extract the attention pattern or 'all' to
     """
+
     extract_resid_in: bool = False
     extract_resid_mid: bool = False
     extract_resid_out: bool = False
@@ -151,7 +151,9 @@ class HookedModel:
                 model_name=config.model_name,
                 device_map=config.device_map,
                 torch_dtype=config.torch_dtype,
-                attn_implementation=config.attn_implementation,
+                attn_implementation="eager"
+                if config.attn_implementation == "custom_eager"
+                else config.attn_implementation,
             )
         )
         self.use_language_model = False
@@ -190,12 +192,15 @@ class HookedModel:
         }
         self.additional_hooks = []
         self.assert_all_modules_exist()
-        
+
         if self.config.attn_implementation == "custom_eager":
-            self.logger.info("""
+            self.logger.info(
+                """
                             The model is using the custom eager attention implementation that support attention matrix hooks because I get config.attn_impelemntation == 'custom_eager'. If you don't want this, you can call HookedModel.restore_original_modules. 
                             However, we reccomend using this implementation since the base one do not contains attention matrix hook resulting in unexpected behaviours. 
-                            """, std_out=True)
+                            """,
+                std_out=True,
+            )
             self.set_custom_modules()
 
     def __repr__(self):
@@ -249,7 +254,7 @@ class HookedModel:
     def set_custom_modules(self):
         self.logger.info("Setting custom modules.", std_out=True)
         self.module_wrapper_manager.substitute_attention_module(self.hf_model)
-        
+
     def restore_original_modules(self):
         self.logger.info("Restoring original modules.", std_out=True)
         self.module_wrapper_manager.restore_original_attention_module(self.hf_model)
@@ -958,7 +963,9 @@ class HookedModel:
                 hook_handlers.append(
                     get_module_by_path(
                         self.hf_model, component
-                    ).register_forward_pre_hook(partial(hook_function, output=None), with_kwargs=True)
+                    ).register_forward_pre_hook(
+                        partial(hook_function, output=None), with_kwargs=True
+                    )
                 )
             elif last_module == "output":
                 hook_handlers.append(

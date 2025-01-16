@@ -7,8 +7,11 @@ from easyroutine.interpretability.hooked_model import (
     ExtractionConfig,
 )
 from easyroutine.interpretability.activation_cache import ActivationCache
+from PIL import Image
+import numpy as np
 
 
+DEVICE = "cuda:4"
 class BaseHookedModelTestCase(unittest.TestCase):
     __test__ = False
     CONFIG = None
@@ -67,14 +70,7 @@ class BaseHookedModelTestCase(unittest.TestCase):
         self.assertIn("logits", cache)
 
     def test_forward_with_split_positions(self):
-        inputs = {
-            "input_ids": torch.tensor(
-                [[101, 102, 103, 104, 105, 106]], device=self.MODEL.device()
-            ),
-            "attention_mask": torch.tensor(
-                [[1, 1, 1, 1, 1]], device=self.MODEL.device()
-            ),
-        }
+
         extracted_token_position = ["position-group-0"]
         cache = self.MODEL.forward(
             self.INPUTS,
@@ -90,7 +86,7 @@ class BaseHookedModelTestCase(unittest.TestCase):
 
         extracted_token_position = ["position-group-1"]
         cache = self.MODEL.forward(
-            inputs,
+            self.INPUTS,
             extracted_token_position,
             split_positions=[4],
             extraction_config=ExtractionConfig(extract_resid_out=True),
@@ -264,6 +260,22 @@ class TestHookedTestModel(BaseHookedModelTestCase):
         }
         cls.input_size = cls.INPUTS["input_ids"].shape[1]
 
+################# Utils ####################
+
+def get_a_random_pil():
+    # Define image dimensions
+    width, height = 256, 256
+
+    # Create random pixel data
+    random_data = np.random.randint(0, 256, (height, width, 3), dtype=np.uint8)
+
+    # Create an image from the random data
+    random_image = Image.fromarray(random_data)
+
+    return random_image
+
+
+
 
 ################## Test Cases for Chameleon Model ####################
 
@@ -275,16 +287,26 @@ class TestHookedChameleonModel(BaseHookedModelTestCase):
         cls.MODEL = HookedModel(
             HookedModelConfig(
                 model_name="facebook/chameleon-7b",
-                device_map="auto",
+                device_map=DEVICE,
                 torch_dtype=torch.bfloat16,
                 attn_implementation="custom_eager",
                 batch_size=1,
             )
         )
-        cls.INPUTS = {
-            "input_ids": torch.tensor([[101, 102, 103, 104, 105, 106]], device="cuda"),
-            "attention_mask": torch.tensor([[1, 1, 1, 1, 1]], device="cuda"),
-        }
+        tokenizer = cls.MODEL.get_tokenizer()
+        cls.INPUTS = tokenizer(
+            text="This is a test. <image>. This is a test",
+            images=[
+                # pil image between 0 and 1
+                get_a_random_pil()
+                ],
+            return_tensors="pt",
+        )  # type: ignore
+        cls.INPUTS = {k: v.to(cls.MODEL.device()) for k, v in cls.INPUTS.items()}
+        cls.INPUTS["pixel_values"] = cls.INPUTS["pixel_values"].to(
+            cls.MODEL.config.torch_dtype
+        )
+        cls.input_size = cls.INPUTS["input_ids"].shape[1]
 
 
 ################## Test Cases for pixtral Model ####################
@@ -297,7 +319,7 @@ class TestHookedPixtralModel(BaseHookedModelTestCase):
         cls.MODEL = HookedModel(
             HookedModelConfig(
                 model_name="mistral-community/pixtral-12b",
-                device_map="auto",
+                device_map=DEVICE,
                 torch_dtype=torch.bfloat16,
                 attn_implementation="custom_eager",
                 batch_size=1,
@@ -311,6 +333,7 @@ class TestHookedPixtralModel(BaseHookedModelTestCase):
 
 ################## Test Cases for llava Model ####################
 
+
 class TestHookedLlavaModel(BaseHookedModelTestCase):
     @classmethod
     def setUpClass(cls):
@@ -318,7 +341,7 @@ class TestHookedLlavaModel(BaseHookedModelTestCase):
         cls.MODEL = HookedModel(
             HookedModelConfig(
                 model_name="llava-hf/llava-v1.6-mistral-7b-hf",
-                device_map="auto",
+                device_map=DEVICE,
                 torch_dtype=torch.bfloat16,
                 attn_implementation="custom_eager",
                 batch_size=1,
@@ -326,7 +349,9 @@ class TestHookedLlavaModel(BaseHookedModelTestCase):
         )
         tokenizer = cls.MODEL.get_tokenizer()
         cls.INPUTS = tokenizer(
-            text="This is a test. <image>. This is a test", images=[torch.randn(1, 3, 224, 224)], return_tensors="pt"
+            text="This is a test. <image>. This is a test",
+            images=[torch.randn(1, 3, 224, 224)],
+            return_tensors="pt",
         )  # type: ignore
 
         cls.INPUTS = {k: v.to(cls.MODEL.device()) for k, v in cls.INPUTS.items()}

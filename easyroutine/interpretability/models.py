@@ -57,6 +57,8 @@ class ModelConfig:
     attn_out_proj_weight: str # Name of the attention output projection weight
     attn_out_proj_bias: str # Name of the attention output projection bias
     embed_tokens: str # Name of the embedding tokens torch module where attach the hook
+    unembed_matrix: str # Name of the unembedding matrix torch module where attach the hook
+    last_layernorm: str
 
     num_hidden_layers: int # Number of hidden layers
     num_attention_heads: int # Number of attention heads
@@ -65,6 +67,7 @@ class ModelConfig:
     num_key_value_groups: int # Number of key value groups
     head_dim: int # Dimension of the attention head
 
+    
 
 # SPECIFIC MODEL CONFIGURATIONS
 
@@ -125,7 +128,27 @@ class ModelFactory:
                 device_map=device_map,
                 attn_implementation=attn_implementation,
             )
-            model_config = ModelFactory._create_model_config(model.config, prefix="model.")
+            model_config = ModelConfig(
+                residual_stream_input_hook_name="model.layers[{}].input",
+                residual_stream_hook_name="model.layers[{}].output",
+                intermediate_stream_hook_name="model.layers[{}].post_attention_layernorm.output",
+                residual_stream_input_post_layernorm_hook_name="model.layers[{}].self_attn.input",
+                attn_value_hook_name="model.layers[{}].self_attn.v_proj.output",
+                attn_out_hook_name="model.layers[{}].self_attn.o_proj.output",
+                attn_in_hook_name="model.layers[{}].self_attn.input",
+                attn_matrix_hook_name="model.layers[{}].self_attn.attention_matrix_hook.output",
+                attn_out_proj_weight="model.layers[{}].self_attn.o_proj.weight",
+                attn_out_proj_bias="model.layers[{}].self_attn.o_proj.bias",
+                embed_tokens="model.embed_tokens.input",
+                unembed_matrix="lm_head.weight",
+                last_layernorm="model.norm",
+                num_hidden_layers=model.config.num_hidden_layers,
+                num_attention_heads=model.config.num_attention_heads,
+                hidden_size=model.config.hidden_size,
+                num_key_value_heads=model.config.num_key_value_heads,
+                num_key_value_groups=model.config.num_attention_heads // model.config.num_key_value_heads,
+                head_dim=model.config.hidden_size // model.config.num_attention_heads,
+            )
 
         elif model_name in [
             "mistral-community/pixtral-12b",
@@ -138,6 +161,27 @@ class ModelFactory:
                     device_map=device_map,
                     attn_implementation=attn_implementation,
                 )
+                model_config = ModelConfig(
+                    residual_stream_input_hook_name="language_model.model.layers[{}].input",
+                    residual_stream_hook_name="language_model.model.layers[{}].output",
+                    intermediate_stream_hook_name="language_model.model.layers[{}].post_attention_layernorm.output",
+                    residual_stream_input_post_layernorm_hook_name="language_model.model.layers[{}].self_attn.input",
+                    attn_value_hook_name="language_model.model.layers[{}].self_attn.v_proj.output",
+                    attn_out_hook_name="language_model.model.layers[{}].self_attn.o_proj.output",
+                    attn_in_hook_name="language_model.model.layers[{}].self_attn.input",
+                    attn_matrix_hook_name="language_model.model.layers[{}].self_attn.attention_matrix_hook.output",
+                    attn_out_proj_weight="language_model.model.layers[{}].self_attn.o_proj.weight",
+                    attn_out_proj_bias="language_model.model.layers[{}].self_attn.o_proj.bias",
+                    embed_tokens="language_model.model.embed_tokens.input",
+                    unembed_matrix="language_model.lm_head.weight",
+                    last_layernorm="language_model.model.norm",
+                    num_hidden_layers=model.language_model.config.num_hidden_layers,
+                    num_attention_heads=model.language_model.config.num_attention_heads,
+                    hidden_size=model.language_model.config.hidden_size,
+                    num_key_value_heads=model.language_model.config.num_key_value_heads,
+                    num_key_value_groups=model.language_model.config.num_attention_heads // model.language_model.config.num_key_value_heads,
+                    head_dim=model.language_model.config.hidden_size // model.language_model.config.num_attention_heads,
+                )
             elif model_name == "llava-hf/llava-v1.6-mistral-7b-hf":
                 model = LlavaNextForConditionalGeneration.from_pretrained(
                     model_name,
@@ -145,10 +189,31 @@ class ModelFactory:
                     device_map=device_map,
                     attn_implementation=attn_implementation,
                 )
+                model_config = ModelConfig(
+                    residual_stream_input_hook_name="language_model.model.layers[{}].input",
+                    residual_stream_hook_name="language_model.model.layers[{}].output",
+                    intermediate_stream_hook_name="language_model.model.layers[{}].post_attention_layernorm.output",
+                    residual_stream_input_post_layernorm_hook_name="language_model.model.layers[{}].self_attn.input",
+                    attn_value_hook_name="language_model.model.layers[{}].self_attn.v_proj.output",
+                    attn_out_hook_name="language_model.model.layers[{}].self_attn.o_proj.output",
+                    attn_in_hook_name="language_model.model.layers[{}].self_attn.input",
+                    attn_matrix_hook_name="language_model.model.layers[{}].self_attn.attention_matrix_hook.output",
+                    attn_out_proj_weight="language_model.model.layers[{}].self_attn.o_proj.weight",
+                    attn_out_proj_bias="language_model.model.layers[{}].self_attn.o_proj.bias",
+                    embed_tokens="language_model.model.embed_tokens.input",
+                    unembed_matrix="language_model.lm_head.weight",
+                    last_layernorm="language_model.model.norm",
+                    num_hidden_layers=model.language_model.config.num_hidden_layers,
+                    num_attention_heads=model.language_model.config.num_attention_heads,
+                    hidden_size=model.language_model.config.hidden_size,
+                    num_key_value_heads=model.language_model.config.num_key_value_heads,
+                    num_key_value_groups=model.language_model.config.num_attention_heads // model.language_model.config.num_key_value_heads,
+                    head_dim=model.language_model.config.hidden_size // model.language_model.config.num_attention_heads,
+                )
             else:
                 raise ValueError("Unsupported model_name")
             language_model = model.language_model
-            model_config = ModelFactory._create_model_config(model.language_model.config, prefix="language_model.model.")
+
 
         elif model_name in ["Emu3-Chat", "Emu3-Gen", "Emu3-Stage1"]:
             raise NotImplementedError("Emu3 model not implemented yet")
@@ -157,7 +222,27 @@ class ModelFactory:
             model = LlamaForCausalLM.from_pretrained(
                 model_name, torch_dtype=torch_dtype, device_map=device_map, attn_implementation=attn_implementation
             )
-            model_config = ModelFactory._create_model_config(model.config)
+            model_config = ModelConfig(
+                residual_stream_input_hook_name="model.layers[{}].input",
+                residual_stream_hook_name="model.layers[{}].output",
+                intermediate_stream_hook_name="model.layers[{}].post_attention_layernorm.output",
+                residual_stream_input_post_layernorm_hook_name="model.layers[{}].self_attn.input",
+                attn_value_hook_name="model.layers[{}].self_attn.v_proj.output",
+                attn_out_hook_name="model.layers[{}].self_attn.o_proj.output",
+                attn_in_hook_name="model.layers[{}].self_attn.input",
+                attn_matrix_hook_name="model.layers[{}].self_attn.attention_matrix_hook.output",
+                attn_out_proj_weight="model.layers[{}].self_attn.o_proj.weight",
+                attn_out_proj_bias="model.layers[{}].self_attn.o_proj.bias",
+                embed_tokens="model.embed_tokens.input",
+                unembed_matrix="lm_head.weight",
+                last_layernorm="model.norm",
+                num_hidden_layers=model.config.num_hidden_layers,
+                num_attention_heads=model.config.num_attention_heads,
+                hidden_size=model.config.hidden_size,
+                num_key_value_heads=model.config.num_key_value_heads,
+                num_key_value_groups=model.config.num_attention_heads // model.config.num_key_value_heads,
+                head_dim=model.config.hidden_size // model.config.num_attention_heads,
+            )
             
         elif model_name in ["CohereForAI/aya-101"]:
             model = T5ForConditionalGeneration.from_pretrained(
@@ -169,28 +254,32 @@ class ModelFactory:
         else:
             raise ValueError("Unsupported model_name")
         return model, language_model, model_config
-
     @staticmethod
-    def _create_model_config(model_config, prefix="model.",):
-        return ModelConfig(
-            residual_stream_input_hook_name=f"{prefix}layers[{{}}].input",
-            residual_stream_hook_name=f"{prefix}layers[{{}}].output",
-            intermediate_stream_hook_name=f"{prefix}layers[{{}}].post_attention_layernorm.output",
-            residual_stream_input_post_layernorm_hook_name=f"{prefix}layers[{{}}].self_attn.input",
-            attn_value_hook_name=f"{prefix}layers[{{}}].self_attn.v_proj.output",
-            attn_out_hook_name=f"{prefix}layers[{{}}].self_attn.o_proj.output",
-            attn_in_hook_name=f"{prefix}layers[{{}}].self_attn.input",
-            attn_matrix_hook_name=f"{prefix}layers[{{}}].self_attn.attention_matrix_hook.output",
-            attn_out_proj_weight=f"{prefix}layers[{{}}].self_attn.o_proj.weight",
-            attn_out_proj_bias=f"{prefix}layers[{{}}].self_attn.o_proj.bias",
-            embed_tokens=f"{prefix}embed_tokens.input",
-            num_hidden_layers=model_config.num_hidden_layers,
-            num_attention_heads=model_config.num_attention_heads,
-            hidden_size=model_config.hidden_size,
-            num_key_value_heads=model_config.num_key_value_heads,
-            num_key_value_groups=model_config.num_attention_heads // model_config.num_key_value_heads,
-            head_dim=model_config.hidden_size // model_config.num_attention_heads,
-        )
+    def _create_model_config( **kwargs):
+        raise NotImplementedError("This method should be implemented in the if")
+    # @staticmethod
+    # def _create_model_config(model_config, prefix="model.",):
+    #     return ModelConfig(
+    #         residual_stream_input_hook_name=f"{prefix}layers[{{}}].input",
+    #         residual_stream_hook_name=f"{prefix}layers[{{}}].output",
+    #         intermediate_stream_hook_name=f"{prefix}layers[{{}}].post_attention_layernorm.output",
+    #         residual_stream_input_post_layernorm_hook_name=f"{prefix}layers[{{}}].self_attn.input",
+    #         attn_value_hook_name=f"{prefix}layers[{{}}].self_attn.v_proj.output",
+    #         attn_out_hook_name=f"{prefix}layers[{{}}].self_attn.o_proj.output",
+    #         attn_in_hook_name=f"{prefix}layers[{{}}].self_attn.input",
+    #         attn_matrix_hook_name=f"{prefix}layers[{{}}].self_attn.attention_matrix_hook.output",
+    #         attn_out_proj_weight=f"{prefix}layers[{{}}].self_attn.o_proj.weight",
+    #         attn_out_proj_bias=f"{prefix}layers[{{}}].self_attn.o_proj.bias",
+    #         embed_tokens=f"{prefix}embed_tokens.input",
+    #         unembed_matrix=f"{prefix}lm_head.weight",
+    #         last_norm_module=
+    #         num_hidden_layers=model_config.num_hidden_layers,
+    #         num_attention_heads=model_config.num_attention_heads,
+    #         hidden_size=model_config.hidden_size,
+    #         num_key_value_heads=model_config.num_key_value_heads,
+    #         num_key_value_groups=model_config.num_attention_heads // model_config.num_key_value_heads,
+    #         head_dim=model_config.hidden_size // model_config.num_attention_heads,
+    #     )
 
 
 class TokenizerFactory:

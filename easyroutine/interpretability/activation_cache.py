@@ -123,6 +123,9 @@ class ActivationCache():
         """
         return key in self.cache
     
+    def get(self, key:str, default=None):
+        return self.cache.get(key, default)
+    
     def items(self):
         """
         Just like the dictionary items method, returns a list of key-value pairs.

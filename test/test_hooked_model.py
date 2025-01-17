@@ -223,9 +223,9 @@ class BaseHookedModelTestCase(unittest.TestCase):
         )
         cache = self.MODEL.forward(
             self.INPUTS,
-            self.TARGET_TOKEN_POSITION,
+            ["all"],
             split_positions=[4],
-            extraction_config=ExtractionConfig(extract_avg_attn_pattern=True),
+            extraction_config=ExtractionConfig(extract_attn_pattern=True, avg_over_example=True),
             external_cache=external_cache,
             batch_idx=1,
         )
@@ -239,7 +239,7 @@ class BaseHookedModelTestCase(unittest.TestCase):
     def test_hook_extract_attn_pattern(self):
         cache = self.MODEL.forward(
             self.INPUTS,
-            self.TARGET_TOKEN_POSITION,
+            ["all"],
             split_positions=[4],
             extraction_config=ExtractionConfig(extract_attn_pattern=True),
         )
@@ -288,7 +288,62 @@ class BaseHookedModelTestCase(unittest.TestCase):
                         print(f"Mismatch found in key: {key}")
                     self.assertTrue(torch.allclose(cache_original[key], cache_custom[key]))
                 
+    def test_get_last_layernorm(self):
+        norm = self.MODEL.get_last_layernorm()
+        self.assertIsNotNone(norm)
+        
+    def get_lm_head(self):
+        unembed = self.MODEL.get_lm_head()
+        
+        # assert is not None
+        self.assertIsNotNone(unembed)
+        
+    def test_generate(self):
+        pass # TODO: Implement this test
+    
+    def test_generate_with_extract_cache(self):
+        # TODO: Implement this test
+        pass
+    
+    def test_ablation_attn_matrix(self):
+        ablation_cache = self.MODEL.forward(
+            self.INPUTS,
+            target_token_positions=["all"],
+            split_positions=[4],
+            extraction_config=ExtractionConfig(
+                extract_resid_out=True,
+                extract_attn_pattern=True,
+            ),
+            ablation_queries=[
+                {
+                    "type": "std",
+                    "elem-to-ablate": "@position-group-0",
+                    "head-layer-couple": [[2,1]]
+                }
+            ]
+        )
+        
+        # cache = self.MODEL.forward(
+        #     self.INPUTS,
+        #     target_token_positions=["last"],
+        #     split_positions=[4],
+        #     extraction_config=ExtractionConfig(
+        #         extract_resid_out=True,
+        #         extract_attn_pattern=True,
+        #     )
+        # )
+        # assert that cache["pattern_L1H1"] is in the cache
+        self.assertIn("pattern_L1H1", ablation_cache)
+        # assert that cache["resid_out_0"] has shape (1,self.input_size,self.input_size)
+        self.assertEqual(ablation_cache["pattern_L1H2"].shape, (1, self.input_size, self.input_size))
+        
+        self.assertEqual(ablation_cache["pattern_L1H2"][0,:4,:4].sum(), 0)  
+        
+        
 
+    def test_patching(self):
+        # TODO: Implement this test
+        pass
 
 ################### BASE TEST CASES ######################
 class TestHookedTestModel(BaseHookedModelTestCase):

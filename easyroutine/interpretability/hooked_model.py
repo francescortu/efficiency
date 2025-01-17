@@ -39,6 +39,7 @@ from easyroutine.interpretability.hooks import (
     avg_attention_pattern_head,
     attention_pattern_head,
     get_module_by_path,
+    process_args_kwargs_output
 )
 
 from functools import partial
@@ -83,15 +84,14 @@ class ExtractionConfig:
         extract_resid_out (bool): if True, extract the output of the residual stream
         extract_resid_in_post_layernorm(bool): if True, extract the input of the residual stream after the layernorm
         extract_attn_pattern (bool): if True, extract the attention pattern of the attn
-        extract_avg_attn_pattern (bool): if True, extract the average attention pattern of the model
         extract_values_vectors_projected (bool): if True, extract the values vectors projected of the model
-        extract_avg_values_vectors_projected (bool): if True, extract the average values vectors projected of the model
         extract_values (bool): if True, extract the values of the attention
         extract_head_out (bool): if True, extract the output of the heads [DEPRECATED]
         extract_attn_out (bool): if True, extract the output of the attention of the attn_heads passed
         extract_attn_in (bool): if True, extract the input of the attention of the attn_heads passed
         save_input_ids (bool): if True, save the input_ids in the cache
-        extract_avg (bool): if True, extract the average of the activations
+        avg (bool): if True, extract the average of the activations over the target positions
+        avg_over_example (bool): if True, extract the average of the activations over the examples (it required a external cache to save the running avg)
         attn_heads (Union[list[dict], Literal["all"]]): list of dictionaries with the layer and head to extract the attention pattern or 'all' to
     """
 
@@ -100,15 +100,14 @@ class ExtractionConfig:
     extract_resid_out: bool = False
     extract_resid_in_post_layernorm: bool = False
     extract_attn_pattern: bool = False
-    extract_avg_attn_pattern: bool = False
     extract_values_vectors_projected: bool = False
-    extract_avg_values_vectors_projected: bool = False
     extract_values: bool = False
     extract_head_out: bool = False
     extract_attn_out: bool = False
     extract_attn_in: bool = False
     save_input_ids: bool = False
-    extract_avg: bool = False
+    avg: bool = False
+    avg_over_example:bool = False
     attn_heads: Union[list[dict], Literal["all"]] = "all"
 
     def is_not_empty(self):
@@ -121,15 +120,14 @@ class ExtractionConfig:
                 self.extract_resid_mid,
                 self.extract_resid_out,
                 self.extract_attn_pattern,
-                self.extract_avg_attn_pattern,
                 self.extract_values_vectors_projected,
-                self.extract_avg_values_vectors_projected,
                 self.extract_values,
                 self.extract_head_out,
                 self.extract_attn_out,
                 self.extract_attn_in,
                 self.save_input_ids,
-                self.extract_avg,
+                self.avg,
+                self.avg_over_example
             ]
         )
 
@@ -313,6 +311,12 @@ class HookedModel:
         if self.processor is None:
             raise ValueError("The model does not have a processor")
         return self.processor
+    
+    def get_lm_head(self):
+        return get_attribute_by_name(self.hf_model, self.model_config.unembed_matrix)
+
+    def get_last_layernorm(self):
+        return get_attribute_by_name(self.hf_model, self.model_config.last_layernorm)
 
     def eval(self):
         r"""
@@ -402,26 +406,13 @@ class HookedModel:
         r"""
         Create the hooks to extract the activations of the model. The hooks will be added to the model and will be called in the forward pass of the model.
 
-        Args:
+        Arguments:
             inputs (dict): dictionary with the inputs of the model (input_ids, attention_mask, pixel_values ...)
             cache (ActivationCache): dictionary where the activations of the model will be saved
             extracted_token_position (list[str]): list of tokens to extract the activations from (["last", "end-image", "start-image", "first"])
             string_tokens (list[str]): list of string tokens
             split_positions (Optional[list[int]]): list of split positions of the tokens
-            attn_heads (Union[list[dict], Literal["all"]]): list of dictionaries with the layer and head to extract the attention pattern or 'all' to
-            extract_attn_pattern (bool): if True, extract the attention pattern of the attn_heads passed
-            extract_attn_out (bool): if True, extract the output of the attention of the attn_heads passed
-            extract_attn_in (bool): if True, extract the input of the attention of the attn_heads passed
-            extract_avg_attn_pattern (bool): if True, extract the average attention pattern of the model
-            extract_avg_values_vectors_projected (bool): if True, extract the average values vectors projected of the model
-            extract_resid_in (bool): if True, extract the input of the residual stream
-            extract_resid_out (bool): if True, extract the output of the residual stream
-            extract_values (bool): if True, extract the values of the attention
-            extract_resid_mid (bool): if True, extract the output of the intermediate stream
-            save_input_ids (bool): if True, save the input_ids in the cache
-            extract_head_out (bool): if True, extract the output of the heads [DEPRECATED]
-            extract_values_vectors_projected (bool): if True, extract the values vectors projected of the model
-            extract_avg (bool): if True, extract the average of the activations
+            extraction_config (ExtractionConfig): configuration of the extraction of the activations of the model (default = ExtractionConfig())            
             ablation_queries (Optional[Union[dict, pd.DataFrame]]): dictionary or dataframe with the ablation queries to perform during forward pass
             patching_queries (Optional[Union[dict, pd.DataFrame]]): dictionary or dataframe with the patching queries to perform during forward pass
             batch_idx (Optional[int]): index of the batch in the dataloader
@@ -442,6 +433,7 @@ class HookedModel:
                         cache=cache,
                         cache_key=f"resid_out_{i}",
                         token_index=token_index,
+                        avg = extraction_config.avg
                     ),
                 }
                 for i in range(0, self.model_config.num_hidden_layers)
@@ -458,6 +450,7 @@ class HookedModel:
                         cache=cache,
                         cache_key=f"resid_in_{i}",
                         token_index=token_index,
+                        avg = extraction_config.avg
                     ),
                 }
                 for i in range(0, self.model_config.num_hidden_layers)
@@ -474,6 +467,7 @@ class HookedModel:
                         cache=cache,
                         cache_key=f"resid_in_post_layernorm_{i}",
                         token_index=token_index,
+                        avg = extraction_config.avg
                     ),
                 }
                 for i in range(0, self.model_config.num_hidden_layers)
@@ -500,6 +494,7 @@ class HookedModel:
                         cache=cache,
                         cache_key=f"values_{i}",
                         token_index=token_index,
+                        avg = extraction_config.avg
                     ),
                 }
                 for i in range(0, self.model_config.num_hidden_layers)
@@ -514,6 +509,7 @@ class HookedModel:
                         cache=cache,
                         cache_key=f"attn_in_{i}",
                         token_index=token_index,
+                        avg = extraction_config.avg
                     ),
                 }
                 for i in range(0, self.model_config.num_hidden_layers)
@@ -528,34 +524,35 @@ class HookedModel:
                         cache=cache,
                         cache_key=f"attn_out_{i}",
                         token_index=token_index,
+                        avg = extraction_config.avg
                     ),
                 }
                 for i in range(0, self.model_config.num_hidden_layers)
             ]
 
-        if extraction_config.extract_avg:
-            # Define a hook that saves the activations of the residual stream
-            raise NotImplementedError(
-                "The hook for the average is not working with token_index as a list"
-            )
+        # if extraction_config.extract_avg:
+        #     # Define a hook that saves the activations of the residual stream
+        #     raise NotImplementedError(
+        #         "The hook for the average is not working with token_index as a list"
+        #     )
 
-            # hooks.extend(
-            #     [
-            #         {
-            #             "component": self.model_config.residual_stream_hook_name.format(
-            #                 i
-            #             ),
-            #             "intervention": partial(
-            #                 avg_hook,
-            #                 cache=cache,
-            #                 cache_key="resid_avg_{}".format(i),
-            #                 last_image_idx=last_image_idxs, #type
-            #                 end_image_idx=end_image_idxs,
-            #             ),
-            #         }
-            #         for i in range(0, self.model_config.num_hidden_layers)
-            #     ]
-            # )
+        #     # hooks.extend(
+        #     #     [
+        #     #         {
+        #     #             "component": self.model_config.residual_stream_hook_name.format(
+        #     #                 i
+        #     #             ),
+        #     #             "intervention": partial(
+        #     #                 avg_hook,
+        #     #                 cache=cache,
+        #     #                 cache_key="resid_avg_{}".format(i),
+        #     #                 last_image_idx=last_image_idxs, #type
+        #     #                 end_image_idx=end_image_idxs,
+        #     #             ),
+        #     #         }
+        #     #         for i in range(0, self.model_config.num_hidden_layers)
+        #     #     ]
+        #     # )
         if extraction_config.extract_resid_mid:
             hooks += [
                 {
@@ -567,6 +564,7 @@ class HookedModel:
                         cache=cache,
                         cache_key=f"resid_mid_{i}",
                         token_index=token_index,
+                        avg = extraction_config.avg
                     ),
                 }
                 for i in range(0, self.model_config.num_hidden_layers)
@@ -595,17 +593,8 @@ class HookedModel:
                 current forward pass.
                 """
 
-                def patch_tokens_hook(module, input, output):
-                    if output is None:
-                        if isinstance(input, tuple):
-                            b = input[0]
-                        else:
-                            b = input
-                    else:
-                        if isinstance(output, tuple):
-                            b = output[0]
-                        else:
-                            b = output
+                def patch_tokens_hook(module, args, kwargs, output): # TODO: Move to hook.py
+                    b = process_args_kwargs_output(args, kwargs, output)
                     # Modify the tensor without affecting the computation graph
                     act_to_patch = b.detach().clone()
                     for pos, patch in zip(
@@ -675,7 +664,6 @@ class HookedModel:
 
         if (
             extraction_config.extract_values_vectors_projected
-            or extraction_config.extract_avg_values_vectors_projected
         ):
             if (
                 extraction_config.attn_heads == "all"
@@ -686,6 +674,7 @@ class HookedModel:
                         "intervention": partial(
                             projected_value_vectors_head,
                             cache=cache,
+                            token_index=token_index,
                             layer=i,
                             num_attention_heads=self.model_config.num_attention_heads,
                             num_key_value_heads=self.model_config.num_key_value_heads,
@@ -700,6 +689,7 @@ class HookedModel:
                                 f"{self.model_config.attn_out_proj_bias.format(i)}",
                             ),
                             head="all",
+                            avg = extraction_config.avg
                         ),
                     }
                     for i in range(0, self.model_config.num_hidden_layers)
@@ -716,6 +706,7 @@ class HookedModel:
                             "intervention": partial(
                                 projected_value_vectors_head,
                                 cache=cache,
+                                token_index=token_index,
                                 layer=layer,
                                 num_attention_heads=self.model_config.num_attention_heads,
                                 hidden_size=self.model_config.hidden_size,
@@ -726,70 +717,74 @@ class HookedModel:
                                     layer
                                 ].self_attn.o_proj.bias,  # (d_model)
                                 head=head,
+                                avg = extraction_config.avg
                             ),
                         }
                     )
-        if extraction_config.extract_avg_attn_pattern:
-            if external_cache is None:
-                self.logger.warning(
-                    """The external_cache is None. The average could not be computed since missing an external cache where store the iterations.
-                    Returning the base attn_pattern for this input...
-                    """
-                )
-                extract_attn_pattern = True
-            elif batch_idx is None:
-                self.logger.warning(
-                    """The batch_idx is None. The average could not be computed since missing the batch index.
-                    Returning the base attn_pattern for this input...
-                    """
-                )
-                extract_attn_pattern = True
-            else:
-                # move the cache to the same device of the model
-                external_cache.to(self.first_device)
-                hooks += [
-                    {
-                        "component": self.model_config.attn_matrix_hook_name.format(i),
-                        "intervention": partial(
-                            avg_attention_pattern_head,
-                            layer=i,
-                            attn_pattern_current_avg=external_cache,
-                            batch_idx=batch_idx,
-                            cache=cache,
-                            extract_avg_value=extraction_config.extract_avg_values_vectors_projected,
-                        ),
-                    }
-                    for i in range(0, self.model_config.num_hidden_layers)
-                ]
+
         if extraction_config.extract_attn_pattern:
-            if extraction_config.attn_heads == "all":
-                hooks += [
-                    {
-                        "component": self.model_config.attn_matrix_hook_name.format(i),
-                        "intervention": partial(
-                            attention_pattern_head,
-                            cache=cache,
-                            layer=i,
-                            head="all",
-                        ),
-                    }
-                    for i in range(0, self.model_config.num_hidden_layers)
-                ]
+            if extraction_config.avg:
+                if external_cache is None:
+                    self.logger.warning(
+                        """The external_cache is None. The average could not be computed since missing an external cache where store the iterations.
+                        """
+                    )
+                elif batch_idx is None:
+                    self.logger.warning(
+                        """The batch_idx is None. The average could not be computed since missing the batch index.
+                       
+                        """
+                    )
+                else:
+                    # move the cache to the same device of the model
+                    external_cache.to(self.first_device)
+                    hooks += [
+                        {
+                            "component": self.model_config.attn_matrix_hook_name.format(i),
+                            "intervention": partial(
+                                avg_attention_pattern_head,
+                                token_index=token_index,
+                                layer=i,
+                                attn_pattern_current_avg=external_cache,
+                                batch_idx=batch_idx,
+                                cache=cache,
+                                # avg=extraction_config.avg,
+                                extract_avg_value=extraction_config.extract_values_vectors_projected,
+                            ),
+                        }
+                        for i in range(0, self.model_config.num_hidden_layers)
+                    ]
             else:
-                hooks += [
-                    {
-                        "component": self.model_config.attn_matrix_hook_name.format(
-                            el["layer"]
-                        ),
-                        "intervention": partial(
-                            attention_pattern_head,
-                            cache=cache,
-                            layer=el["layer"],
-                            head=el["head"],
-                        ),
-                    }
-                    for el in extraction_config.attn_heads
-                ]
+                if extraction_config.attn_heads == "all":
+                    hooks += [
+                        {
+                            "component": self.model_config.attn_matrix_hook_name.format(i),
+                            "intervention": partial(
+                                attention_pattern_head,
+                                token_index=token_index,
+                                cache=cache,
+                                layer=i,
+                                head="all",
+                            ),
+                        }
+                        for i in range(0, self.model_config.num_hidden_layers)
+                    ]
+                else:
+                    hooks += [
+                        {
+                            "component": self.model_config.attn_matrix_hook_name.format(
+                                el["layer"]
+                            ),
+                            "intervention": partial(
+                                attention_pattern_head,
+                                token_index=token_index,
+                                cache=cache,
+                                layer=el["layer"],
+                                head=el["head"],
+                            ),
+                        }
+                        for el in extraction_config.attn_heads
+                    ]
 
             # if additional hooks are not empty, add them to the hooks list
         if self.additional_hooks:

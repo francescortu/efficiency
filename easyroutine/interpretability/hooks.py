@@ -60,13 +60,16 @@ def embed_hook(module, input, output, cache, cache_key):
     return b
 
 # Define a hook that saves the activations of the residual stream
-def save_resid_hook(module, args, kwargs, output,  cache, cache_key, token_index,  ):
+def save_resid_hook(module, args, kwargs, output,  cache, cache_key, token_index, avg:bool = False ):
     r"""
     It save the activations of the residual stream in the cache. It will save the activations in the cache (a global variable out the scope of the function)
     """
     b = process_args_kwargs_output(args, kwargs, output)
+    
     # slice the tensor to get the activations of the token we want to extract
     cache[cache_key] = b.data.detach().clone()[..., token_index, :]
+    if avg:
+        cache[cache_key] = torch.mean(cache[cache_key], dim=-1, keepdim=True)
 
 
 
@@ -220,6 +223,7 @@ def projected_value_vectors_head(
     output,
     layer,
     cache,
+    token_index,
     num_attention_heads: int,
     num_key_value_heads: int,
     hidden_size: int,
@@ -229,6 +233,7 @@ def projected_value_vectors_head(
     head: Union[str, int] = "all",
     act_on_input = False,
     expand_head: bool = True,
+    avg = False,
 ):
     r"""
     Hook function to extract the values vectors of the heads. It will extract the values vectors and then project them with the final W_O projection
@@ -291,6 +296,12 @@ def projected_value_vectors_head(
         projected_values,
         "batch seq_len num_head d_model -> batch num_head seq_len d_model",
     )
+    
+    # slice for token index
+    projected_values = projected_values[:, :, token_index, :]
+    
+    if avg:
+        projected_values = torch.mean(projected_values, dim=-1, keepdim=True)
 
     # post-process the values vectors
     if head == "all":
@@ -305,10 +316,12 @@ def avg_attention_pattern_head(
     args,
     kwargs,
     output,
+    token_index,
     layer,
     attn_pattern_current_avg,
     batch_idx,
     cache,
+    avg:bool = False,
     extract_avg_value: bool = False,
     act_on_input = False,
 ):
@@ -332,10 +345,10 @@ def avg_attention_pattern_head(
     for head in range(num_heads):
         key = f"avg_pattern_L{layer}H{head}"
         if key not in attn_pattern_current_avg:
-            attn_pattern_current_avg[key] = attn_pattern[:, head]
+            attn_pattern_current_avg[key] = attn_pattern[:, head, token_index][:, :, token_index]
         else:
             attn_pattern_current_avg[key] += (
-                attn_pattern[:, head] - attn_pattern_current_avg[key]
+                attn_pattern[:, head, token_index][:, :, token_index] - attn_pattern_current_avg[key]
             ) / (batch_idx+1)
         attn_pattern_current_avg[key] = attn_pattern_current_avg[key]
         # var_key = f"M2_pattern_L{layer}H{head}"
@@ -360,10 +373,10 @@ def avg_attention_pattern_head(
             norm_matrix = norm_matrix * attn_pattern[:, head]
             
             if value_key not in attn_pattern_current_avg:
-                attn_pattern_current_avg[value_key] = norm_matrix
+                attn_pattern_current_avg[value_key] = norm_matrix[...,token_index,:]
             else:
                 attn_pattern_current_avg[value_key] += (
-                    norm_matrix - attn_pattern_current_avg[value_key]    
+                    norm_matrix[...,token_index,:] - attn_pattern_current_avg[value_key]    
                 ) / (batch_idx+1)
                 
                 
@@ -376,6 +389,7 @@ def attention_pattern_head(
     args,
     kwargs,
     output,
+    token_index,
     layer,
     cache,
     head: Union[str, int] = "all",
@@ -402,9 +416,9 @@ def attention_pattern_head(
     if head == "all":
         for head_idx in range(attn_pattern.size(1)):
             key = f"pattern_L{layer}H{head_idx}"
-            cache[key] = attn_pattern[:, head_idx]
+            cache[key] = attn_pattern[:, head_idx, token_index][:, :, token_index]
     else:
-        cache[f"pattern_L{layer}H{head}"] = attn_pattern[:, head]
+        cache[f"pattern_L{layer}H{head}"] = attn_pattern[:, head,  token_index][:, :, token_index]
         
         
         

@@ -5,10 +5,10 @@ import pandas as pd
 from typing import List, Callable, Union
 from einops import rearrange, einsum
 from easyroutine.interpretability.utils import repeat_kv, get_module_by_path
+from easyroutine.interpretability.activation_cache import ActivationCache
 from functools import partial
 import re
 import torch.nn as nn
-
 
 
 def process_args_kwargs_output(args, kwargs, output):
@@ -60,7 +60,7 @@ def embed_hook(module, input, output, cache, cache_key):
     return b
 
 # Define a hook that saves the activations of the residual stream
-def save_resid_hook(module, args, kwargs, output,  cache, cache_key, token_index, avg:bool = False ):
+def save_resid_hook(module, args, kwargs, output,  cache: ActivationCache, cache_key, token_index, avg:bool = False ):
     r"""
     It save the activations of the residual stream in the cache. It will save the activations in the cache (a global variable out the scope of the function)
     """
@@ -68,10 +68,11 @@ def save_resid_hook(module, args, kwargs, output,  cache, cache_key, token_index
     
     # slice the tensor to get the activations of the token we want to extract
     cache[cache_key] = b.data.detach().clone()[..., token_index, :]
+    
     if avg:
-        cache[cache_key] = torch.mean(cache[cache_key], dim=-1, keepdim=True)
+        cache[cache_key] = torch.mean(cache[cache_key], dim=-2, keepdim=True)
         
-def query_key_value_hook(module, args, kwargs, output,  cache, cache_key, token_index, head_dim, avg:bool = False ):
+def query_key_value_hook(module, args, kwargs, output,  cache: ActivationCache, cache_key, token_index, head_dim, avg:bool = False ):
     r"""
     Same as save_resid_hook but for the query, key and value vectors, it just have a reshape to have the head dimension.
     """
@@ -79,9 +80,19 @@ def query_key_value_hook(module, args, kwargs, output,  cache, cache_key, token_
     input_shape = b.shape[:-1]
     hidden_shape = (*input_shape, -1, head_dim)
     b = b.view(hidden_shape).transpose(1, 2)
-    cache[cache_key] = b.data.detach().clone()[..., token_index, :]
+    # cache[cache_key] = b.data.detach().clone()[..., token_index, :]
+    
+    if "values_" in cache_key or "keys_" in cache_key:
+        info_string = "Shape: batch n_head//num_key_value_heads seq_len d_head"
+    elif "queries_" in cache_key:
+        info_string = "Shape: batch n_head seq_len d_head"
+    else:
+        info_string = "Dimension not specified"
+
+    cache.add_with_info(cache_key, b.data.detach().clone()[..., token_index, :], info_string )
     if avg:
-        cache[cache_key] = torch.mean(cache[cache_key], dim=-1, keepdim=True)
+        # cache[cache_key] = torch.mean(cache[cache_key], dim=-1, keepdim=True)
+        cache.add_with_info(cache_key, torch.mean(cache[cache_key], dim=-2, keepdim=True), info_string.replace("seq_len", "1") + " (avg over seq_len)")
 
 
 

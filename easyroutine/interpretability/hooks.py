@@ -70,6 +70,18 @@ def save_resid_hook(module, args, kwargs, output,  cache, cache_key, token_index
     cache[cache_key] = b.data.detach().clone()[..., token_index, :]
     if avg:
         cache[cache_key] = torch.mean(cache[cache_key], dim=-1, keepdim=True)
+        
+def query_key_value_hook(module, args, kwargs, output,  cache, cache_key, token_index, head_dim, avg:bool = False ):
+    r"""
+    Same as save_resid_hook but for the query, key and value vectors, it just have a reshape to have the head dimension.
+    """
+    b = process_args_kwargs_output(args, kwargs, output)
+    input_shape = b.shape[:-1]
+    hidden_shape = (*input_shape, -1, head_dim)
+    b = b.view(hidden_shape).transpose(1, 2)
+    cache[cache_key] = b.data.detach().clone()[..., token_index, :]
+    if avg:
+        cache[cache_key] = torch.mean(cache[cache_key], dim=-1, keepdim=True)
 
 
 

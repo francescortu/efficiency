@@ -174,6 +174,31 @@ class BaseHookedModelTestCase(unittest.TestCase):
         self.assertEqual(
             cache["resid_mid_0"].shape, (1, 4, self.MODEL.model_config.hidden_size)
         )
+        
+    def test_hook_extract_head_key_value_keys(self):
+        cache = self.MODEL.forward(
+            self.INPUTS,
+            self.TARGET_TOKEN_POSITION,
+            split_positions=[4],
+            extraction_config=ExtractionConfig(
+                extract_head_keys=True,
+                extract_head_values=True,
+                extract_head_queries=True,
+            ))
+        
+        # assert that cache have "values_0" and "keys_0" and "queries_0" 
+        self.assertIn("values_0", cache)
+        self.assertEqual(
+            cache["values_0"].shape, (1, 4, self.MODEL.model_config.num_attention_heads, self.MODEL.model_config.hidden_size // self.MODEL.model_config.num_attention_heads)
+        )
+        self.assertIn("keys_0", cache)
+        self.assertEqual(
+            cache["keys_0"].shape, (1, 4, self.MODEL.model_config.num_attention_heads, self.MODEL.model_config.hidden_size // self.MODEL.model_config.num_attention_heads)
+        )
+        self.assertIn("queries_0", cache)
+        self.assertEqual(
+            cache["queries_0"].shape, (1, 4, self.MODEL.model_config.num_attention_heads, self.MODEL.model_config.hidden_size // self.MODEL.model_config.num_attention_heads)
+        )
 
     def test_hook_extract_attn_in(self):
         cache = self.MODEL.forward(

@@ -40,7 +40,8 @@ from easyroutine.interpretability.hooks import (
     attention_pattern_head,
     get_module_by_path,
     process_args_kwargs_output,
-    query_key_value_hook
+    query_key_value_hook,
+    head_out_hook
 )
 
 from functools import partial
@@ -511,7 +512,7 @@ class HookedModel:
                     "intervention": partial(
                         query_key_value_hook,
                         cache=cache,
-                        cache_key=f"queries_",
+                        cache_key="queries_",
                         token_index=token_index,
                         head_dim = self.model_config.head_dim,
                         avg=extraction_config.avg,
@@ -523,22 +524,6 @@ class HookedModel:
                 for i, head in zip(layer_indexes, head_indexes)
             ]
             
-            # hooks += [
-            #     {
-            #         "component": self.model_config.head_query_hook_name.format(i),
-            #         "intervention": partial(
-            #             query_key_value_hook,
-            #             cache=cache,
-            #             cache_key=f"queries_",
-            #             token_index=token_index,
-            #             head_dim = self.model_config.head_dim,
-            #             avg=extraction_config.avg,
-            #             layer=i,
-            #             head="all",
-            #         ),
-            #     }
-            #     for i in range(0, self.model_config.num_hidden_layers)
-            # ]
 
         if extraction_config.extract_head_values:
             hooks += [
@@ -547,7 +532,7 @@ class HookedModel:
                     "intervention": partial(
                         query_key_value_hook,
                         cache=cache,
-                        cache_key=f"values_",
+                        cache_key="values_",
                         token_index=token_index,
                         head_dim = self.model_config.head_dim,
                         avg=extraction_config.avg,
@@ -566,7 +551,7 @@ class HookedModel:
                     "intervention": partial(
                         query_key_value_hook,
                         cache=cache,
-                        cache_key=f"keys_",
+                        cache_key="keys_",
                         token_index=token_index,
                         head_dim = self.model_config.head_dim,
                         avg=extraction_config.avg,
@@ -577,6 +562,30 @@ class HookedModel:
                 }
                 for i, head in zip(layer_indexes, head_indexes)
             ]
+            
+        if extraction_config.extract_attn_out:
+            hooks += [{
+                "component": self.model_config.attn_o_proj_input_hook_name.format(i),
+                "intervention": partial(
+                    head_out_hook,
+                    cache=cache,
+                    cache_key="head_out_",
+                    token_index=token_index,
+                    avg=extraction_config.avg,
+                    layer=i,
+                    head=head,
+                    o_proj_weight=get_attribute_from_name(
+                        self.hf_model,
+                        self.model_config.attn_out_proj_weight.format(i),
+                    ),
+                    o_proj_bias=get_attribute_from_name(
+                        self.hf_model,
+                        self.model_config.attn_out_proj_bias.format(i),
+                    ),
+                ),
+            }
+            for i, head in zip(layer_indexes, head_indexes)
+        ]
 
         if extraction_config.extract_attn_in:
             hooks += [

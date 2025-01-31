@@ -9,6 +9,7 @@ from easyroutine.interpretability.activation_cache import ActivationCache
 from functools import partial
 import re
 import torch.nn as nn
+import einops
 
 
 def process_args_kwargs_output(args, kwargs, output):
@@ -150,6 +151,51 @@ def avg_hook(
         [img_avg.unsqueeze(1), text_avg.unsqueeze(1), all_avg.unsqueeze(1)], dim=1
     )
 
+
+def head_out_hook(
+    module,
+    args,
+    kwargs,
+    output,
+    cache,
+    cache_key,
+    token_index,
+    layer,
+    o_proj_weight,
+    o_proj_bias,
+    head: Union[str, int] = "all",
+    avg: bool = False,
+):
+    b = process_args_kwargs_output(args, kwargs, output)
+    
+    bsz, num_heads, seq_len, head_dim = b.shape
+    
+    # reshape the weights to have the head dimension
+    o_proj_weight = einops.rearrange(
+        o_proj_weight,
+        "d_model d_model -> num_heads head_dim d_model",
+    )
+    
+    # apply the projection
+    projected_values = einsum(
+        b,
+        o_proj_weight,
+        "batch seq_len num_head d_model, num_head head_dim d_model -> batch seq_len num_head head_dim",
+    )
+    
+    if o_proj_bias is not None:
+        projected_values = projected_values + o_proj_bias
+        
+    # slice for token index
+    projected_values = projected_values[:, :, token_index, :]
+    
+    if avg:
+        projected_values = torch.mean(projected_values, dim=-2, keepdim=True)
+    
+    heads = [idx for idx in range(num_heads)] if head == "all" else [head]
+    for head_idx in heads:
+        cache[f"{cache_key}L{layer}H{head_idx}"] = projected_values[:, int(head_idx)] 
+        
 
 def zero_ablation(tensor):
     r"""

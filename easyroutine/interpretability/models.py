@@ -59,6 +59,7 @@ class ModelConfig:
     attn_in_hook_name: str
     attn_in_hook_name: str
     attn_out_hook_name: str
+    attn_o_proj_input_hook_name: str
     attn_matrix_hook_name: str
     mlp_out_hook_name: str
 
@@ -144,6 +145,7 @@ class ModelFactory:
                 head_value_hook_name="model.layers[{}].self_attn.v_proj.output",
                 head_query_hook_name="model.layers[{}].self_attn.q_proj.output",
                 attn_out_hook_name="model.layers[{}].self_attn.o_proj.output",
+                attn_o_proj_input_hook_name="model.layers[{}].self_attn.o_proj.input",
                 attn_in_hook_name="model.layers[{}].self_attn.input",
                 mlp_out_hook_name="model.layers[{}].mlp.down_proj.output",
                 attn_matrix_hook_name="model.layers[{}].self_attn.attention_matrix_hook.output",
@@ -181,6 +183,7 @@ class ModelFactory:
                     head_value_hook_name="language_model.model.layers[{}].self_attn.v_proj.output",
                     head_query_hook_name="language_model.model.layers[{}].self_attn.q_proj.output",
                     attn_out_hook_name="language_model.model.layers[{}].self_attn.o_proj.output",
+                    attn_o_proj_input_hook_name="language_model.model.layers[{}].self_attn.o_proj.input",
                     attn_in_hook_name="language_model.model.layers[{}].self_attn.input",
                     attn_matrix_hook_name="language_model.model.layers[{}].self_attn.attention_matrix_hook.output",
                     mlp_out_hook_name="language_model.model.layers[{}].mlp.down_proj.output",
@@ -212,6 +215,7 @@ class ModelFactory:
                     head_value_hook_name="language_model.model.layers[{}].self_attn.v_proj.output",
                     head_query_hook_name="language_model.model.layers[{}].self_attn.q_proj.output",
                     attn_out_hook_name="language_model.model.layers[{}].self_attn.o_proj.output",
+                    attn_o_proj_input_hook_name="language_model.model.layers[{}].self_attn.o_proj.input",
                     attn_in_hook_name="language_model.model.layers[{}].self_attn.input",
                     attn_matrix_hook_name="language_model.model.layers[{}].self_attn.attention_matrix_hook.output",
                     mlp_out_hook_name="language_model.model.layers[{}].mlp.down_proj.output",
@@ -250,6 +254,7 @@ class ModelFactory:
                 head_value_hook_name="model.layers[{}].self_attn.v_proj.output",
                 head_key_hook_name="model.layers[{}].self_attn.k_proj.output",
                 attn_out_hook_name="model.layers[{}].self_attn.o_proj.output",
+                attn_o_proj_input_hook_name="model.layers[{}].self_attn.o_proj.input",
                 attn_in_hook_name="model.layers[{}].self_attn.input",
                 attn_matrix_hook_name="model.layers[{}].self_attn.attention_matrix_hook.output",
                 mlp_out_hook_name="model.layers[{}].mlp.down_proj.output",

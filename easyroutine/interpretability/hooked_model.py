@@ -84,7 +84,7 @@ class ExtractionConfig:
         extract_resid_out (bool): if True, extract the output of the residual stream
         extract_resid_in_post_layernorm(bool): if True, extract the input of the residual stream after the layernorm
         extract_attn_pattern (bool): if True, extract the attention pattern of the attn
-        extract_values_vectors_projected (bool): if True, extract the values vectors projected of the model
+        extract_head_values_projected (bool): if True, extract the values vectors projected of the model
         extract_head_values (bool): if True, extract the values of the attention
         extract_head_out (bool): if True, extract the output of the heads [DEPRECATED]
         extract_attn_out (bool): if True, extract the output of the attention of the attn_heads passed
@@ -101,7 +101,9 @@ class ExtractionConfig:
     extract_resid_out: bool = False
     extract_resid_in_post_layernorm: bool = False
     extract_attn_pattern: bool = False
-    extract_values_vectors_projected: bool = False
+    extract_head_values_projected: bool = False
+    # TODO: add extract_head_queries_projected
+    # TODO: add extract_head_keys_projected
     extract_head_keys: bool = False
     extract_head_values: bool = False
     extract_head_queries: bool = False
@@ -124,7 +126,7 @@ class ExtractionConfig:
                 self.extract_resid_mid,
                 self.extract_resid_out,
                 self.extract_attn_pattern,
-                self.extract_values_vectors_projected,
+                self.extract_head_values_projected,
                 self.extract_head_keys,
                 self.extract_head_values,
                 self.extract_head_queries,
@@ -426,6 +428,17 @@ class HookedModel:
             hooks (list[dict]): list of dictionaries with the component and the intervention to perform in the forward pass of the model
         """
         hooks = []
+        
+        # compute layer and head indexes
+        if isinstance(extraction_config.attn_heads, str) and extraction_config.attn_heads == "all":
+            layer_indexes = [i for i in range(0, self.model_config.num_hidden_layers)]
+            head_indexes = ["all"] * len(layer_indexes)
+        elif isinstance(extraction_config.attn_heads, list):
+            layer_head_indexes = [(el["layer"], el["head"]) for el in extraction_config.attn_heads]
+            layer_indexes = [el[0] for el in layer_head_indexes]
+            head_indexes = [el[1] for el in layer_head_indexes]
+        else:
+            raise ValueError("attn_heads must be 'all' or a list of dictionaries as [{'layer': 0, 'head': 0}]")
 
         if extraction_config.extract_resid_out:
             # assert that the component exists in the model
@@ -478,6 +491,7 @@ class HookedModel:
             ]
 
         if extraction_config.save_input_ids:
+
             hooks += [
                 {
                     "component": self.model_config.embed_tokens,
@@ -490,20 +504,41 @@ class HookedModel:
             ]
 
         if extraction_config.extract_head_queries:
+            
             hooks += [
                 {
                     "component": self.model_config.head_query_hook_name.format(i),
                     "intervention": partial(
                         query_key_value_hook,
                         cache=cache,
-                        cache_key=f"queries_{i}",
+                        cache_key=f"queries_",
                         token_index=token_index,
                         head_dim = self.model_config.head_dim,
                         avg=extraction_config.avg,
+                        layer=i,
+                        head=head,
+                        num_key_value_groups=self.model_config.num_key_value_groups
                     ),
                 }
-                for i in range(0, self.model_config.num_hidden_layers)
+                for i, head in zip(layer_indexes, head_indexes)
             ]
+            
+            # hooks += [
+            #     {
+            #         "component": self.model_config.head_query_hook_name.format(i),
+            #         "intervention": partial(
+            #             query_key_value_hook,
+            #             cache=cache,
+            #             cache_key=f"queries_",
+            #             token_index=token_index,
+            #             head_dim = self.model_config.head_dim,
+            #             avg=extraction_config.avg,
+            #             layer=i,
+            #             head="all",
+            #         ),
+            #     }
+            #     for i in range(0, self.model_config.num_hidden_layers)
+            # ]
 
         if extraction_config.extract_head_values:
             hooks += [
@@ -512,13 +547,16 @@ class HookedModel:
                     "intervention": partial(
                         query_key_value_hook,
                         cache=cache,
-                        cache_key=f"values_{i}",
+                        cache_key=f"values_",
                         token_index=token_index,
                         head_dim = self.model_config.head_dim,
                         avg=extraction_config.avg,
+                        layer=i,
+                        head=head,
+                        num_key_value_groups=self.model_config.num_key_value_groups
                     ),
                 }
-                for i in range(0, self.model_config.num_hidden_layers)
+                for i, head in zip(layer_indexes, head_indexes)
             ]
             
         if extraction_config.extract_head_keys:
@@ -528,13 +566,16 @@ class HookedModel:
                     "intervention": partial(
                         query_key_value_hook,
                         cache=cache,
-                        cache_key=f"keys_{i}",
+                        cache_key=f"keys_",
                         token_index=token_index,
                         head_dim = self.model_config.head_dim,
                         avg=extraction_config.avg,
+                        layer=i,
+                        head=head,
+                        num_key_value_groups=self.model_config.num_key_value_groups
                     ),
                 }
-                for i in range(0, self.model_config.num_hidden_layers)
+                for i, head in zip(layer_indexes, head_indexes)
             ]
 
         if extraction_config.extract_attn_in:
@@ -716,10 +757,7 @@ class HookedModel:
             )
             hooks.extend(ablation_manager.main())
 
-        if extraction_config.extract_values_vectors_projected:
-            if (
-                extraction_config.attn_heads == "all"
-            ):  # extract the output of all the heads
+        if extraction_config.extract_head_values_projected:
                 hooks += [
                     {
                         "component": self.model_config.head_value_hook_name.format(i),
@@ -740,39 +778,12 @@ class HookedModel:
                                 self.hf_model,
                                 f"{self.model_config.attn_out_proj_bias.format(i)}",
                             ),
-                            head="all",
+                            head=head,
                             avg=extraction_config.avg,
                         ),
                     }
-                    for i in range(0, self.model_config.num_hidden_layers)
+                    for i, head in zip(layer_indexes, head_indexes)
                 ]
-            elif isinstance(extraction_config.attn_heads, list):
-                for el in extraction_config.attn_heads:
-                    head = el["head"]
-                    layer = el["layer"]
-                    hooks.append(
-                        {
-                            "component": self.model_config.head_value_hook_name.format(
-                                layer
-                            ),
-                            "intervention": partial(
-                                projected_value_vectors_head,
-                                cache=cache,
-                                token_index=token_index,
-                                layer=layer,
-                                num_attention_heads=self.model_config.num_attention_heads,
-                                hidden_size=self.model_config.hidden_size,
-                                out_proj_weight=self.hf_model.model.layers[
-                                    layer
-                                ].self_attn.o_proj.weight,  # (d_model, d_model)
-                                out_proj_bias=self.hf_model.model.layers[
-                                    layer
-                                ].self_attn.o_proj.bias,  # (d_model)
-                                head=head,
-                                avg=extraction_config.avg,
-                            ),
-                        }
-                    )
 
         if extraction_config.extract_attn_pattern:
             if extraction_config.avg:
@@ -803,44 +814,27 @@ class HookedModel:
                                 batch_idx=batch_idx,
                                 cache=cache,
                                 # avg=extraction_config.avg,
-                                extract_avg_value=extraction_config.extract_values_vectors_projected,
+                                extract_avg_value=extraction_config.extract_head_values_projected,
                             ),
                         }
                         for i in range(0, self.model_config.num_hidden_layers)
                     ]
             else:
-                if extraction_config.attn_heads == "all":
-                    hooks += [
-                        {
-                            "component": self.model_config.attn_matrix_hook_name.format(
-                                i
-                            ),
-                            "intervention": partial(
-                                attention_pattern_head,
-                                token_index=token_index,
-                                cache=cache,
-                                layer=i,
-                                head="all",
-                            ),
-                        }
-                        for i in range(0, self.model_config.num_hidden_layers)
-                    ]
-                else:
-                    hooks += [
-                        {
-                            "component": self.model_config.attn_matrix_hook_name.format(
-                                el["layer"]
-                            ),
-                            "intervention": partial(
-                                attention_pattern_head,
-                                token_index=token_index,
-                                cache=cache,
-                                layer=el["layer"],
-                                head=el["head"],
-                            ),
-                        }
-                        for el in extraction_config.attn_heads
-                    ]
+                hooks += [
+                    {
+                        "component": self.model_config.attn_matrix_hook_name.format(
+                            i
+                        ),
+                        "intervention": partial(
+                            attention_pattern_head,
+                            token_index=token_index,
+                            cache=cache,
+                            layer=i,
+                            head=head,
+                        ),
+                    }
+                    for i, head in zip(layer_indexes, head_indexes)
+                ]
 
             # if additional hooks are not empty, add them to the hooks list
         if self.additional_hooks:
@@ -1301,7 +1295,7 @@ class HookedModel:
                 "extract_head_out": False,
                 "extract_avg_attn_pattern": False,
                 "extract_avg_values_vectors_projected": False,
-                "extract_values_vectors_projected": False,
+                "extract_head_values_projected": False,
                 "extract_avg": False,
                 "ablation_queries": None,
                 "patching_queries": None,

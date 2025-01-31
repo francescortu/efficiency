@@ -187,18 +187,18 @@ class BaseHookedModelTestCase(unittest.TestCase):
                 extract_head_queries=True,
             ))
         
-        # assert that cache have "values_0" and "keys_0" and "queries_0" 
-        self.assertIn("values_0", cache)
+        # assert that cache have "values_L0H1" and "keys_L0H1" and "queries_L0H1" 
+        self.assertIn("values_L0H1", cache)
         self.assertEqual(
-            cache["values_0"].shape, (1, self.MODEL.model_config.num_attention_heads // self.MODEL.model_config.num_key_value_groups, 4, self.MODEL.model_config.head_dim)
+            cache["values_L0H1"].shape, (1, 4, self.MODEL.model_config.head_dim)
         )
-        self.assertIn("keys_0", cache)
+        self.assertIn("keys_L0H1", cache)
         self.assertEqual(
-            cache["keys_0"].shape, (1, self.MODEL.model_config.num_attention_heads // self.MODEL.model_config.num_key_value_groups, 4, self.MODEL.model_config.head_dim)
+            cache["keys_L0H1"].shape, (1, 4, self.MODEL.model_config.head_dim)
         )
-        self.assertIn("queries_0", cache)
+        self.assertIn("queries_L0H1", cache)
         self.assertEqual(
-            cache["queries_0"].shape, (1, self.MODEL.model_config.num_attention_heads , 4, self.MODEL.model_config.head_dim)
+            cache["queries_L0H1"].shape, (1,  4, self.MODEL.model_config.head_dim)
         )
 
     def test_hook_extract_attn_in(self):

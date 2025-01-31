@@ -193,10 +193,8 @@ class ModelFactory:
                     num_attention_heads=model.language_model.config.num_attention_heads,
                     hidden_size=model.language_model.config.hidden_size,
                     num_key_value_heads=model.language_model.config.num_key_value_heads,
-                    num_key_value_groups=model.language_model.config.num_attention_heads
-                    // model.language_model.config.num_key_value_heads,
-                    head_dim=model.language_model.config.hidden_size
-                    // model.language_model.config.num_attention_heads,
+                    num_key_value_groups=model.language_model.config.num_attention_heads // model.language_model.config.num_key_value_heads,
+                    head_dim=model.language_model.config.head_dim
                 )
             elif model_name == "llava-hf/llava-v1.6-mistral-7b-hf":
                 model = LlavaNextForConditionalGeneration.from_pretrained(
@@ -226,10 +224,8 @@ class ModelFactory:
                     num_attention_heads=model.language_model.config.num_attention_heads,
                     hidden_size=model.language_model.config.hidden_size,
                     num_key_value_heads=model.language_model.config.num_key_value_heads,
-                    num_key_value_groups=model.language_model.config.num_attention_heads
-                    // model.language_model.config.num_key_value_heads,
-                    head_dim=model.language_model.config.hidden_size
-                    // model.language_model.config.num_attention_heads,
+                    num_key_value_groups=model.language_model.config.num_attention_heads // model.language_model.config.num_key_value_heads,
+                    head_dim=model.language_model.config.head_dim
                 )
             else:
                 raise ValueError("Unsupported model_name")

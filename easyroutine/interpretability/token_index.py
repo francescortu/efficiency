@@ -93,6 +93,7 @@ class TokenIndex:
             "last_line_image": last_line_image_tokens,
             "text": text_tokens,
             "special": special_tokens,
+            "all": list(range(len(string_tokens))),
             **position_dict,
         }
 
@@ -277,7 +278,7 @@ class TokenIndex:
             "last-image": token_indexes["last_line_image"],
             "end-image": token_indexes["image_end"],
             "all-text": token_indexes["text"],
-            "all": list(range(len(token_indexes["text"]))),
+            "all": token_indexes["all"],
             "all-image": token_indexes["image"],
             "special": token_indexes["special"],
             "random-text": None if len(token_indexes["text"]) == 0 else [random.choice(token_indexes["text"])],

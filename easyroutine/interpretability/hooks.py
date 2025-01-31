@@ -83,7 +83,7 @@ def query_key_value_hook(module, args, kwargs, output,  cache: ActivationCache, 
     # cache[cache_key] = b.data.detach().clone()[..., token_index, :]
     
     if "values_" in cache_key or "keys_" in cache_key:
-        info_string = "Shape: batch n_head//num_key_value_heads seq_len d_head"
+        info_string = "Shape: batch n_head//num_key_value_groups seq_len d_head"
     elif "queries_" in cache_key:
         info_string = "Shape: batch n_head seq_len d_head"
     else:

@@ -176,6 +176,7 @@ class BaseHookedModelTestCase(unittest.TestCase):
         )
         
     def test_hook_extract_head_key_value_keys(self):
+        self.MODEL.restore_original_modules()
         cache = self.MODEL.forward(
             self.INPUTS,
             self.TARGET_TOKEN_POSITION,
@@ -189,15 +190,15 @@ class BaseHookedModelTestCase(unittest.TestCase):
         # assert that cache have "values_0" and "keys_0" and "queries_0" 
         self.assertIn("values_0", cache)
         self.assertEqual(
-            cache["values_0"].shape, (1, 4, self.MODEL.model_config.num_attention_heads, self.MODEL.model_config.hidden_size // self.MODEL.model_config.num_attention_heads)
+            cache["values_0"].shape, (1, self.MODEL.model_config.num_attention_heads // self.MODEL.model_config.num_key_value_groups, 4, self.MODEL.model_config.head_dim)
         )
         self.assertIn("keys_0", cache)
         self.assertEqual(
-            cache["keys_0"].shape, (1, 4, self.MODEL.model_config.num_attention_heads, self.MODEL.model_config.hidden_size // self.MODEL.model_config.num_attention_heads)
+            cache["keys_0"].shape, (1, self.MODEL.model_config.num_attention_heads // self.MODEL.model_config.num_key_value_groups, 4, self.MODEL.model_config.head_dim)
         )
         self.assertIn("queries_0", cache)
         self.assertEqual(
-            cache["queries_0"].shape, (1, 4, self.MODEL.model_config.num_attention_heads, self.MODEL.model_config.hidden_size // self.MODEL.model_config.num_attention_heads)
+            cache["queries_0"].shape, (1, self.MODEL.model_config.num_attention_heads , 4, self.MODEL.model_config.head_dim)
         )
 
     def test_hook_extract_attn_in(self):

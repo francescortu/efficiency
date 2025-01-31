@@ -53,6 +53,7 @@ class ModelConfig:
     attn_in_hook_name: str # Name of the attention input torch module where attach the hook
     attn_out_hook_name: str # Name of the attention output torch module where attach the hook
     attn_matrix_hook_name: str # Name of the attention matrix torch module where attach the hook
+    mlp_out_hook_name: str # Name of the mlp output torch module where attach the hook
 
     attn_out_proj_weight: str # Name of the attention output projection weight
     attn_out_proj_bias: str # Name of the attention output projection bias
@@ -136,6 +137,7 @@ class ModelFactory:
                 attn_value_hook_name="model.layers[{}].self_attn.v_proj.output",
                 attn_out_hook_name="model.layers[{}].self_attn.o_proj.output",
                 attn_in_hook_name="model.layers[{}].self_attn.input",
+                mlp_out_hook_name="model.layers[{}].mlp.down_proj.output",
                 attn_matrix_hook_name="model.layers[{}].self_attn.attention_matrix_hook.output",
                 attn_out_proj_weight="model.layers[{}].self_attn.o_proj.weight",
                 attn_out_proj_bias="model.layers[{}].self_attn.o_proj.bias",
@@ -170,6 +172,7 @@ class ModelFactory:
                     attn_out_hook_name="language_model.model.layers[{}].self_attn.o_proj.output",
                     attn_in_hook_name="language_model.model.layers[{}].self_attn.input",
                     attn_matrix_hook_name="language_model.model.layers[{}].self_attn.attention_matrix_hook.output",
+                    mlp_out_hook_name="language_model.model.layers[{}].mlp.down_proj.output",
                     attn_out_proj_weight="language_model.model.layers[{}].self_attn.o_proj.weight",
                     attn_out_proj_bias="language_model.model.layers[{}].self_attn.o_proj.bias",
                     embed_tokens="language_model.model.embed_tokens.input",
@@ -198,6 +201,7 @@ class ModelFactory:
                     attn_out_hook_name="language_model.model.layers[{}].self_attn.o_proj.output",
                     attn_in_hook_name="language_model.model.layers[{}].self_attn.input",
                     attn_matrix_hook_name="language_model.model.layers[{}].self_attn.attention_matrix_hook.output",
+                    mlp_out_hook_name="language_model.model.layers[{}].mlp.down_proj.output",
                     attn_out_proj_weight="language_model.model.layers[{}].self_attn.o_proj.weight",
                     attn_out_proj_bias="language_model.model.layers[{}].self_attn.o_proj.bias",
                     embed_tokens="language_model.model.embed_tokens.input",
@@ -231,6 +235,7 @@ class ModelFactory:
                 attn_out_hook_name="model.layers[{}].self_attn.o_proj.output",
                 attn_in_hook_name="model.layers[{}].self_attn.input",
                 attn_matrix_hook_name="model.layers[{}].self_attn.attention_matrix_hook.output",
+                mlp_out_hook_name="model.layers[{}].mlp.down_proj.output",
                 attn_out_proj_weight="model.layers[{}].self_attn.o_proj.weight",
                 attn_out_proj_bias="model.layers[{}].self_attn.o_proj.bias",
                 embed_tokens="model.embed_tokens.input",

@@ -89,6 +89,7 @@ class ExtractionConfig:
         extract_head_out (bool): if True, extract the output of the heads [DEPRECATED]
         extract_attn_out (bool): if True, extract the output of the attention of the attn_heads passed
         extract_attn_in (bool): if True, extract the input of the attention of the attn_heads passed
+        extract_mlp_out (bool): if True, extract the output of the mlp of the attn
         save_input_ids (bool): if True, save the input_ids in the cache
         avg (bool): if True, extract the average of the activations over the target positions
         avg_over_example (bool): if True, extract the average of the activations over the examples (it required a external cache to save the running avg)
@@ -105,6 +106,7 @@ class ExtractionConfig:
     extract_head_out: bool = False
     extract_attn_out: bool = False
     extract_attn_in: bool = False
+    extract_mlp_out: bool = False
     save_input_ids: bool = False
     avg: bool = False
     avg_over_example:bool = False
@@ -173,7 +175,6 @@ class HookedModel:
             self.processor = None
             self.text_tokenizer = tokenizer
 
-        # self.hf_language_model = extract_language_model(self.hf_model)
 
         self.first_device = next(self.hf_model.parameters()).device
         device_num = torch.cuda.device_count()
@@ -571,6 +572,20 @@ class HookedModel:
             ]
 
             # if we want to extract the output of the heads
+        if extraction_config.extract_mlp_out:
+            hooks += [
+                {
+                    "component": self.model_config.mlp_out_hook_name.format(i),
+                    "intervention": partial(
+                        save_resid_hook,
+                        cache=cache,
+                        cache_key=f"mlp_out_{i}",
+                        token_index=token_index,
+                        avg = extraction_config.avg
+                    ),
+                }
+                for i in range(0, self.model_config.num_hidden_layers)
+            ]
 
         # PATCHING
         if patching_queries:
@@ -798,8 +813,8 @@ class HookedModel:
         target_token_positions: List[str] = ["last"],
         split_positions: Optional[List[int]] = None,
         extraction_config: ExtractionConfig = ExtractionConfig(),
-        ablation_queries: Optional[pd.DataFrame | None] = None,
-        patching_queries: Optional[pd.DataFrame | None] = None,
+        ablation_queries: Optional[List[dict]] = None,
+        patching_queries: Optional[List[dict]] = None,
         external_cache: Optional[ActivationCache] = None,
         attn_heads: Union[list[dict], Literal["all"]] = "all",
         batch_idx: Optional[int] = None,
@@ -1044,12 +1059,7 @@ class HookedModel:
 
         inputs = self.input_handler.prepare_inputs(inputs, self.first_device)
 
-        model_to_use = (
-            self.hf_language_model if self.use_language_model else self.hf_model
-        )
-        assert model_to_use is not None, "Error: The model is not loaded"
-
-        output = model_to_use.generate(
+        output = self.hf_model.generate(
             **inputs,  # type: ignore
             generation_config=generation_config,
             output_scores=False,  # type: ignore

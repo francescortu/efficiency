@@ -201,6 +201,19 @@ class BaseHookedModelTestCase(unittest.TestCase):
             cache["attn_out_0"].shape, (1, 4, self.MODEL.model_config.hidden_size)
         )
 
+    def test_hook_extract_mlp_out(self):
+        cache = self.MODEL.forward(
+            self.INPUTS,
+            self.TARGET_TOKEN_POSITION,
+            split_positions=[4],
+            extraction_config=ExtractionConfig(extract_mlp_out=True),
+        )
+        # assert that cache["mlp_out_0"] has shape (1, 4, )
+        self.assertIn("mlp_out_0", cache)
+        self.assertEqual(
+            cache["mlp_out_0"].shape, (1, 4, self.MODEL.model_config.hidden_size)
+        )
+
     def test_hook_extract_resid_in_post_layernorm(self):
         cache = self.MODEL.forward(
             self.INPUTS,

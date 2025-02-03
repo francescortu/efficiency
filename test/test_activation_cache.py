@@ -66,6 +66,12 @@ class TestActivationCache(unittest.TestCase):
 
         self.assertTrue(torch.equal(empty_cache["values_0"], torch.tensor([1, 2])))
         self.assertEqual(empty_cache["mapping_index"], [0, 1])
+        
+    def test_add_with_info(self):
+        self.cache1.add_with_info("values_0", torch.tensor([5, 6]), "informative_string")
+        self.assertTrue(torch.equal(self.cache1["values_0"].value(), torch.tensor([5, 6])))
+        self.assertEqual(self.cache1["values_0"].info(), "informative_string")
+        
 
 if __name__ == "__main__":
     unittest.main()

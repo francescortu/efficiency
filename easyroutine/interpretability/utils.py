@@ -432,7 +432,7 @@ def preprocess_ablation_queries(data_list, model_config):
     # Iterate over each dictionary in the input list
     for entry in data_list:
         ablation_type = entry["type"]
-        head_layer_couple = entry["head-layer-couple"]
+        head_layer_couple = entry["head-layer-couple"] # TODO: change to layer-head-couple to be consistent with the rest of the code
         elem_to_ablate = entry.get("elem-to-ablate", "False")
 
         if (

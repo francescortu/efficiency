@@ -4,6 +4,18 @@ import torch
 from typing import List, Union
 import contextlib
 
+class ActivationItem():
+    def __init__(self, value, shape_info:str):
+        self.value = value
+        self.shape = shape_info
+    
+    def __repr__(self):
+        return f"ActivationItem({self.value}, {self.shape})"
+    
+    def __str__(self):
+        return f"ActivationItem({self.value}, {self.shape})"
+    
+
 class ActivationCache():
     r"""
     Class to store and aggregate activation values from a model.
@@ -27,7 +39,8 @@ class ActivationCache():
             re.compile(r"pattern_L\dH\d+"),
             re.compile(r"values_\d+"),
             re.compile(r"input_ids"),
-            re.compile(r"mapping_index")
+            re.compile(r"mapping_index"),
+            re.compile(r"mlp_out_\d+"),
         )
         
         self.aggregation_strategies = {}
@@ -122,6 +135,9 @@ class ActivationCache():
             bool: True if the key is present, False otherwise
         """
         return key in self.cache
+    
+    def get(self, key:str, default=None):
+        return self.cache.get(key, default)
     
     def items(self):
         """
@@ -288,7 +304,71 @@ class ActivationCache():
                 self.cache[key] = self.default_aggregation(
                     [self.cache[key], external_cache[key]]
                 )
-                
+    def add_with_info(self, key: str, value, info: str):
+        """
+        Stores the 'value' under 'key' but wraps it in an object that provides
+        a .info() method returning the 'info' string.
+
+        Arguments:
+            key (str): The cache key.
+            value (Any): The object to store, e.g. a tensor or list.
+            info (str): The associated info string.
+            
+        Examples:
+            >>> cache.add_with_info("resid_out_0", torch.randn(1, 3, 16), "shape: batch x seq x hidden")
+            >>> cache["resid_out_0"].info()
+            shape: batch x seq x hidden
+            >>> cache["resid_out_0"].shape
+            torch.Size([1, 3, 16])
+            >>> cache["resid_out_0"]
+            tensor([[[1, 2, 3, 4]]])
+        
+        """
+
+        class ValueWithInfo:
+            """
+            Thin wrapper around the original value to store extra info.
+            """
+            __slots__ = ("_value", "_info")  # optional for memory efficiency
+
+            def __init__(self, value, info):
+                self._value = value
+                self._info = info
+
+            def info(self):
+                """
+                Return the custom info string.
+                """
+                return self._info
+            
+            def value(self):
+                """
+                Return the value.
+                """
+                return self._value
+
+            def __getattr__(self, name):
+                """
+                Forward attribute lookups to the wrapped value.
+                """
+                return getattr(self._value, name)
+
+            def __repr__(self):
+                return f"ValueWithInfo(value={self._value!r}, info={self._info!r})"
+
+        wrapped = ValueWithInfo(value, info)
+        self[key] = wrapped
+    
+    # def expand_attention_heads(self, dim):
+    #     """
+    #     Expand the head dimension of all tensors in the cache.
+        
+    #     Arguments:
+    #         dim (int): The dimension to expand.
+    #     """
+    #     for key, value in self.cache.items():
+    #         if isinstance(value, torch.Tensor):
+    #             self.cache[key] = value.unsqueeze(dim)
                 
                 
                 

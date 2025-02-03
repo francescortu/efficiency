@@ -7,44 +7,46 @@ import yaml
 
 # Load the YAML configuration file
 def load_config(yaml_file: str) -> dict:
-    with open(yaml_file, 'r') as file:
+    with open(yaml_file, "r") as file:
         return yaml.safe_load(file)
+
 
 config = load_config("easyroutine/interpretability/config/config.yaml")
 
-SUPPORTED_MODELS = config['models']
-SUPPORTED_TOKENS = config['token_position']
+SUPPORTED_MODELS = config["models"]
+SUPPORTED_TOKENS = config["token_position"]
 
 
 class TokenIndex:
     r"""
     TokenIndex is one of the core class of the interpretability module.
-    It is used to find the right indexes that correspond to the tokens in the input of the model. 
+    It is used to find the right indexes that correspond to the tokens in the input of the model.
     In this way we are able to extract the right hidden states and attention weights, based on the tokens we are interested in.
     It support mixed modalities inputs, with both text and images.
-    
+
     """
+
     def __init__(
         self,
         model_name: str,
-        split_positions: Optional[List[int]] = None,
-        split_tokens: Optional[List[str]] = None,
+        pivot_positions: Optional[List[int]] = None,
+        pivot_tokens: Optional[List[str]] = None,
     ):
         r"""
         Args:
             model_name: str (required): the name of the model
-            split_positions: List[int] (optional): a list of integers that represent the positions where to split the tokens. 
-            split_tokens: List[str] (optional): a list of strings that represent the tokens where to split the tokens.
-        
-        
-        The split_positions and split_tokens are mutually exclusive.
+            pivot_positions: List[int] (optional): a list of integers that represent the positions where to split the tokens.
+            pivot_tokens: List[str] (optional): a list of strings that represent the tokens where to split the tokens.
+
+
+        The pivot_positions and pivot_tokens are mutually exclusive.
         The idea of the split is the following. Immagine to have an input string of tokens like this: ["I", "love", "cats", "and", "dogs". "What", "about", "you?"]
-        Then, i want to extract/ablate/intervene on the second sentence. I can do it by specifying the split_positions=[5] or split_tokens=["What"].
-        In this way, the tokens will be split in two groups: ["I", "love", "cats", "and"] and ["dogs", "What", "about", "you?"] with names "position-group-0" and "position-group-1".
+        Then, i want to extract/ablate/intervene on the second sentence. I can do it by specifying the pivot_positions=[5] or pivot_tokens=["What"].
+        In this way, the tokens will be split in two groups: ["I", "love", "cats", "and"] and ["dogs", "What", "about", "you?"] with names "inputs-partition-0" and "inputs-partition-1".
         """
         self.model_name = model_name
-        self.split_tokens = split_tokens
-        self.split_positions = sorted(split_positions) if split_positions else []
+        self.pivot_tokens = pivot_tokens
+        self.pivot_positions = sorted(pivot_positions) if pivot_positions else []
 
     def find_occurrences(self, lst: List[str], target: str) -> List[int]:
         return [i for i, x in enumerate(lst) if x == target]
@@ -66,7 +68,7 @@ class TokenIndex:
         in_image_sequence = False
 
         for i, token in enumerate(string_tokens):
-            if (token == start_image_token and not in_image_sequence):
+            if token == start_image_token and not in_image_sequence:
                 in_image_sequence = True
                 image_start_tokens.append(i)
             elif in_image_sequence and token == end_image_token:
@@ -83,7 +85,7 @@ class TokenIndex:
         tokens_group, positions_group = self.group_tokens(string_tokens)
 
         position_dict = {
-            f"position-group-{i}": positions_group[i] for i in positions_group
+            f"inputs-partition-{i}": positions_group[i] for i in positions_group
         }
 
         return {
@@ -93,15 +95,16 @@ class TokenIndex:
             "last_line_image": last_line_image_tokens,
             "text": text_tokens,
             "special": special_tokens,
+            "all": list(range(len(string_tokens))),
             **position_dict,
         }
 
     def group_tokens(
         self, string_tokens: List[str]
     ) -> Tuple[Dict[int, List[str]], Dict[int, List[int]]]:
-        if self.split_tokens:
-            return self.group_tokens_by_split_tokens(string_tokens)
-        elif self.split_positions:
+        if self.pivot_tokens:
+            return self.group_tokens_by_pivot_tokens(string_tokens)
+        elif self.pivot_positions:
             return self.group_tokens_by_positions(string_tokens)
         else:
             return {0: string_tokens}, {0: list(range(len(string_tokens)))}
@@ -110,27 +113,28 @@ class TokenIndex:
         self, string_tokens: List[str]
     ) -> Tuple[Dict[int, List[str]], Dict[int, List[int]]]:
         tokens_group, positions_group = {}, {}
-        for i, pos in enumerate(self.split_positions):
+        for i, pos in enumerate(self.pivot_positions):
             if i == 0:
                 positions_group[i] = [0, pos]
             else:
-                positions_group[i] = [self.split_positions[i - 1], pos]
-        positions_group[len(self.split_positions)] = [
-            self.split_positions[-1],
+                positions_group[i] = [self.pivot_positions[i - 1], pos]
+        positions_group[len(self.pivot_positions)] = [
+            self.pivot_positions[-1],
             len(string_tokens),
         ]
-        
+
         # modify the positions_group to include all the indexes and not just the start and end
         for i in range(len(positions_group)):
-            positions_group[i] = list(range(positions_group[i][0], positions_group[i][1]))
-            
+            positions_group[i] = list(
+                range(positions_group[i][0], positions_group[i][1])
+            )
 
         for i, group in positions_group.items():
             tokens_group[i] = string_tokens[group[0] : group[1]]
 
         return tokens_group, positions_group
 
-    def group_tokens_by_split_tokens(
+    def group_tokens_by_pivot_tokens(
         self, string_tokens: List[str]
     ) -> Tuple[Dict[int, List[str]], Dict[int, List[int]]]:
         tokens_group, positions_group = {}, {}
@@ -138,8 +142,7 @@ class TokenIndex:
         start_pos = 0
 
         for i, token in enumerate(string_tokens):
-            
-            if isinstance(self.split_tokens, list) and token in self.split_tokens:
+            if isinstance(self.pivot_tokens, list) and token in self.pivot_tokens:
                 positions_group[current_group] = [start_pos, i]
                 tokens_group[current_group] = string_tokens[start_pos:i]
                 current_group += 1
@@ -155,18 +158,18 @@ class TokenIndex:
         tokens: List[str],
         string_tokens: List[str],
         return_type: Literal["list", "dict", "all"] = "list",
-    ) -> Union[List[int],  Dict, Tuple[List[int], Dict]]:
+    ) -> Union[List[int], Dict, Tuple[List[int], Dict]]:
         r"""
         Main interface to get the indexes of the tokens in the input string tokens.
         Args:
             tokens: List[str] (required): a list of strings that represent the tokens we are interested in.
             string_tokens: List[str] (required): a list of strings that represent the input tokens.
-            return_type: Literal["list", "int", "dict"] (optional): the type of the return value. 
+            return_type: Literal["list", "int", "dict"] (optional): the type of the return value.
                 If "list" it returns a list of integers, if "int" it returns an integer, if "dict" it returns a dictionary.
-        
+
         Returns:
             tokens_positions: Union[List[int], int, Dict]: the indexes of the tokens in the input string tokens in the format specified by return_type.
-            
+
         Supported tokens:
             - `last`: the last token of the input sequence
             - `last-2`: the second last token of the input sequence
@@ -181,33 +184,33 @@ class TokenIndex:
             - `random-image`: a random token from the image sequence
             - `random-text-n`: n random tokens from the text sequence
             - `random-image-n`: n random tokens from the image sequence
-            - `position-group-i`: the i-th group of tokens based on the split_positions or split_tokens
-            - `random-position-group-i`: a random token from the i-th group of tokens based on the split_positions or split_tokens
-        
+            - `inputs-partition-i`: the i-th group of tokens based on the pivot_positions or pivot_tokens
+            - `random-inputs-partition-i`: a random token from the i-th group of tokens based on the pivot_positions or pivot_tokens
+
         Examples:
             >>> string_tokens = ["start-image", "img1", "img2", "end-image", I", "love", "cats", "and", "dogs", "What", "about", "you?"]
-            >>> tokens = ["end-image", "all-text", "last", "position-group-1", "position-group-2"]
-            >>> TokenIndex("facebook/Chameleon-7b", split_tokens = ["cats", "dogs"]).get_token_index(tokens, string_tokens, return_type="dict")
-            {'end-image': [3], 'all-text': [4, 5, 6, 7, 8, 9, 10, 11], 'last': [-1], "position-group-1": [7,8], "position-group-2": [9, 10, 11]}
+            >>> tokens = ["end-image", "all-text", "last", "inputs-partition-1", "inputs-partition-2"]
+            >>> TokenIndex("facebook/Chameleon-7b", pivot_tokens = ["cats", "dogs"]).get_token_index(tokens, string_tokens, return_type="dict")
+            {'end-image': [3], 'all-text': [4, 5, 6, 7, 8, 9, 10, 11], 'last': [-1], "inputs-partition-1": [7,8], "inputs-partition-2": [9, 10, 11]}
         """
         if not all(
             token in SUPPORTED_TOKENS
-            or token.startswith("position-group-")
-            or token.startswith("random-position-group-")
+            or token.startswith("inputs-partition-")
+            or token.startswith("random-inputs-partition-")
             for token in tokens
         ):
             raise ValueError(
-                f"Unsupported token type: {tokens}. Supported tokens are: {SUPPORTED_TOKENS} and position-group-0, position-group-1, etc or random-position-group-0, random-position-group-1, etc"
+                f"Unsupported token type: {tokens}. Supported tokens are: {SUPPORTED_TOKENS} and inputs-partition-0, inputs-partition-1, etc or random-inputs-partition-0, random-inputs-partition-1, etc"
             )
 
-        # Check if split_positions is required but not provided
-        if self.split_positions is None and any(
-            token.startswith("position-group-")
-            or token.startswith("random-position-group-")
+        # Check if pivot_positions is required but not provided
+        if self.pivot_positions is None and any(
+            token.startswith("inputs-partition-")
+            or token.startswith("random-inputs-partition-")
             for token in tokens
         ):
             raise ValueError(
-                "split_positions cannot be None when a group position token is requested"
+                "pivot_positions cannot be None when a group position token is requested"
             )
 
         token_indexes = self.categorize_tokens(string_tokens)
@@ -230,17 +233,17 @@ class TokenIndex:
     ) -> List[int]:
         tokens_positions = []
         position_dict = {
-            k: v for k, v in token_indexes.items() if k.startswith("position-group-")
+            k: v for k, v in token_indexes.items() if k.startswith("inputs-partition-")
         }
         random_position_dict = {
             f"random-{k}": random.sample(v, 1) for k, v in position_dict.items()
         }
 
         for token in tokens:
-            if token.startswith("random-position-group-"):
+            if token.startswith("random-inputs-partition-"):
                 group, n = self.parse_random_group_token(token)
                 random_position_dict[token] = random.sample(
-                    position_dict[f"position-group-{group}"], int(n)
+                    position_dict[f"inputs-partition-{group}"], int(n)
                 )
             elif token.startswith("random-image"):
                 n = token.split("-")[-1]
@@ -252,7 +255,7 @@ class TokenIndex:
 
         for token in tokens:
             if token_dict[token] is not None:
-                tokens_positions.extend(token_dict[token]) #type: ignore
+                tokens_positions.extend(token_dict[token])  # type: ignore
 
         return tokens_positions
 
@@ -277,19 +280,25 @@ class TokenIndex:
             "last-image": token_indexes["last_line_image"],
             "end-image": token_indexes["image_end"],
             "all-text": token_indexes["text"],
-            "all": list(range(len(token_indexes["text"]))),
+            "all": token_indexes["all"],
             "all-image": token_indexes["image"],
             "special": token_indexes["special"],
-            "random-text": None if len(token_indexes["text"]) == 0 else [random.choice(token_indexes["text"])],
-            "random-image": None if len(token_indexes["image"]) == 0 else [random.choice(token_indexes["image"])],
+            "random-text": None
+            if len(token_indexes["text"]) == 0
+            else [random.choice(token_indexes["text"])],
+            "random-image": None
+            if len(token_indexes["image"]) == 0
+            else [random.choice(token_indexes["image"])],
             "special-pixtral": [1052, 1051, 1038, 991, 1037, 1047],
             **{
                 k: v
                 for k, v in token_indexes.items()
-                if k.startswith("position-group-")
+                if k.startswith("inputs-partition-")
             },
             **random_position_dict,
         }
+
+
 # from typing import Dict, List, Optional, Union, Literal, Tuple
 # import random
 # from easyroutine.interpretability.models import SUPPORTED_MODELS, SUPPORTED_TOKENS
@@ -298,12 +307,12 @@ class TokenIndex:
 #     def __init__(
 #         self,
 #         model_name: str,
-#         split_positions: Optional[List[int]] = None,
-#         split_tokens: Optional[List[str]] = None,
+#         pivot_positions: Optional[List[int]] = None,
+#         pivot_tokens: Optional[List[str]] = None,
 #     ):
 #         self.model_name = model_name
-#         self.split_tokens = split_tokens
-#         self.split_positions = sorted(split_positions) if split_positions else []
+#         self.pivot_tokens = pivot_tokens
+#         self.pivot_positions = sorted(pivot_positions) if pivot_positions else []
 
 #     def find_occurrences(self, lst: List[str], target: str) -> List[int]:
 #         return [i for i, x in enumerate(lst) if x == target]
@@ -345,13 +354,12 @@ class TokenIndex:
 #                     image_tokens.append(i-1)
 #                     last_line_image_tokens.append(i-2)
 #                 text_tokens.append(i)
-            
-            
+
 
 #         tokens_group, positions_group = self.group_tokens(string_tokens)
 
 #         position_dict = {
-#             f"position-group-{i}": positions_group[i] for i in positions_group
+#             f"inputs-partition-{i}": positions_group[i] for i in positions_group
 #         }
 
 #         return {
@@ -367,9 +375,9 @@ class TokenIndex:
 #     def group_tokens(
 #         self, string_tokens: List[str]
 #     ) -> (Dict[int, List[str]], Dict[int, List[int]]):
-#         if self.split_tokens:
-#             return self.group_tokens_by_split_tokens(string_tokens)
-#         elif self.split_positions:
+#         if self.pivot_tokens:
+#             return self.group_tokens_by_pivot_tokens(string_tokens)
+#         elif self.pivot_positions:
 #             return self.group_tokens_by_positions(string_tokens)
 #         else:
 #             return {0: string_tokens}, {0: list(range(len(string_tokens)))}
@@ -378,13 +386,13 @@ class TokenIndex:
 #         self, string_tokens: List[str]
 #     ) -> (Dict[int, List[str]], Dict[int, List[int]]):
 #         tokens_group, positions_group = {}, {}
-#         for i, pos in enumerate(self.split_positions):
+#         for i, pos in enumerate(self.pivot_positions):
 #             if i == 0:
 #                 positions_group[i] = [0, pos]
 #             else:
-#                 positions_group[i] = [self.split_positions[i - 1], pos]
-#         positions_group[len(self.split_positions)] = [
-#             self.split_positions[-1],
+#                 positions_group[i] = [self.pivot_positions[i - 1], pos]
+#         positions_group[len(self.pivot_positions)] = [
+#             self.pivot_positions[-1],
 #             len(string_tokens),
 #         ]
 
@@ -399,7 +407,7 @@ class TokenIndex:
 
 #         return tokens_group, positions_group
 
-#     def group_tokens_by_split_tokens(
+#     def group_tokens_by_pivot_tokens(
 #         self, string_tokens: List[str]
 #     ) -> (Dict[int, List[str]], Dict[int, List[int]]):
 #         tokens_group, positions_group = {}, {}
@@ -407,7 +415,7 @@ class TokenIndex:
 #         start_pos = 0
 
 #         for i, token in enumerate(string_tokens):
-#             if token in self.split_tokens:
+#             if token in self.pivot_tokens:
 #                 positions_group[current_group] = [start_pos, i]
 #                 tokens_group[current_group] = string_tokens[start_pos:i]
 #                 current_group += 1
@@ -426,22 +434,22 @@ class TokenIndex:
 #     ) -> Union[List[int], int, Dict]:
 #         if not all(
 #             token in SUPPORTED_TOKENS
-#             or token.startswith("position-group-")
-#             or token.startswith("random-position-group-")
+#             or token.startswith("inputs-partition-")
+#             or token.startswith("random-inputs-partition-")
 #             for token in tokens
 #         ):
 #             raise ValueError(
-#                 f"Unsupported token type: {tokens}. Supported tokens are: {SUPPORTED_TOKENS} and position-group-0, position-group-1, etc or random-position-group-0, random-position-group-1, etc"
+#                 f"Unsupported token type: {tokens}. Supported tokens are: {SUPPORTED_TOKENS} and inputs-partition-0, inputs-partition-1, etc or random-inputs-partition-0, random-inputs-partition-1, etc"
 #             )
 
-#         # Check if split_positions is required but not provided
-#         if self.split_positions is None and any(
-#             token.startswith("position-group-")
-#             or token.startswith("random-position-group-")
+#         # Check if pivot_positions is required but not provided
+#         if self.pivot_positions is None and any(
+#             token.startswith("inputs-partition-")
+#             or token.startswith("random-inputs-partition-")
 #             for token in tokens
 #         ):
 #             raise ValueError(
-#                 "split_positions cannot be None when a group position token is requested"
+#                 "pivot_positions cannot be None when a group position token is requested"
 #             )
 
 #         token_indexes = self.categorize_tokens(string_tokens)
@@ -464,17 +472,17 @@ class TokenIndex:
 #     ) -> Tuple[List[int], Dict]:
 #         tokens_positions = []
 #         position_dict = {
-#             k: v for k, v in token_indexes.items() if k.startswith("position-group-")
+#             k: v for k, v in token_indexes.items() if k.startswith("inputs-partition-")
 #         }
 #         random_position_dict = {
 #             f"random-{k}": random.sample(v, 1) for k, v in position_dict.items()
 #         }
 
 #         for token in tokens:
-#             if token.startswith("random-position-group-"):
+#             if token.startswith("random-inputs-partition-"):
 #                 group, n = self.parse_random_group_token(token)
 #                 random_position_dict[token] = random.sample(
-#                     position_dict[f"position-group-{group}"], int(n)
+#                     position_dict[f"inputs-partition-{group}"], int(n)
 #                 )
 #             elif token.startswith("random-image"):
 #                 n = token.split("-")[-1]
@@ -523,7 +531,7 @@ class TokenIndex:
 #             **{
 #                 k: v
 #                 for k, v in token_indexes.items()
-#                 if k.startswith("position-group-")
+#                 if k.startswith("inputs-partition-")
 #             },
 #             **random_position_dict,
 #         }

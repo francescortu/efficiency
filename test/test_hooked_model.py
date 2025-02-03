@@ -19,7 +19,7 @@ class BaseHookedModelTestCase(unittest.TestCase):
     CONFIG = None
     MODEL: HookedModel
     INPUTS: dict
-    TARGET_TOKEN_POSITION = ["position-group-0"]
+    TARGET_TOKEN_POSITION = ["inputs-partition-0"]
     input_size: int
     # def setUp(self):
     #     """
@@ -52,11 +52,11 @@ class BaseHookedModelTestCase(unittest.TestCase):
     #     ),
     # }
 
-    # self.TARGET_TOKEN_POSITION = ["position-group-0"]
+    # self.TARGET_TOKEN_POSITION = ["inputs-partition-0"]
 
     def test_device(self):
         device = self.MODEL.device()
-        self.assertEqual(device.type, "cuda")
+        self.assertEqual(device.type, "cuda") 
 
     def test_to_string_tokens(self):
         """
@@ -66,17 +66,17 @@ class BaseHookedModelTestCase(unittest.TestCase):
         string_tokens = self.MODEL.to_string_tokens(self.INPUTS["input_ids"])
         self.assertEqual(len(string_tokens), self.input_size)
 
-    def test_forward_without_split_positions(self):
+    def test_forward_without_pivot_positions(self):
         extracted_token_position = ["last"]
         cache = self.MODEL.forward(self.INPUTS, extracted_token_position)
         self.assertIn("logits", cache)
 
-    def test_forward_with_split_positions(self):
-        extracted_token_position = ["position-group-0"]
+    def test_forward_with_pivot_positions(self):
+        extracted_token_position = ["inputs-partition-0"]
         cache = self.MODEL.forward(
             self.INPUTS,
             extracted_token_position,
-            split_positions=[4],
+            pivot_positions=[4],
             extraction_config=ExtractionConfig(extract_resid_out=True),
         )
         # assert that cache["resid_out_0"] has shape (1,3,16)
@@ -85,11 +85,11 @@ class BaseHookedModelTestCase(unittest.TestCase):
             cache["resid_out_0"].shape, (1, 4, self.MODEL.model_config.hidden_size)
         )
 
-        extracted_token_position = ["position-group-1"]
+        extracted_token_position = ["inputs-partition-1"]
         cache = self.MODEL.forward(
             self.INPUTS,
             extracted_token_position,
-            split_positions=[4],
+            pivot_positions=[4],
             extraction_config=ExtractionConfig(extract_resid_out=True),
         )
         # assert that cache["resid_out_0"] has shape (1,2,16)
@@ -140,7 +140,7 @@ class BaseHookedModelTestCase(unittest.TestCase):
         cache = self.MODEL.forward(
             self.INPUTS,
             self.TARGET_TOKEN_POSITION,
-            split_positions=[4],
+            pivot_positions=[4],
             extraction_config=ExtractionConfig(extract_resid_out=True),
         )
         # assert that cache["resid_out_0"] has shape (1,3,16)
@@ -153,7 +153,7 @@ class BaseHookedModelTestCase(unittest.TestCase):
         cache = self.MODEL.forward(
             self.INPUTS,
             self.TARGET_TOKEN_POSITION,
-            split_positions=[4],
+            pivot_positions=[4],
             extraction_config=ExtractionConfig(extract_resid_in=True),
         )
         # assert that cache["resid_in_0"] has shape (1,3,16)
@@ -166,7 +166,7 @@ class BaseHookedModelTestCase(unittest.TestCase):
         cache = self.MODEL.forward(
             self.INPUTS,
             self.TARGET_TOKEN_POSITION,
-            split_positions=[4],
+            pivot_positions=[4],
             extraction_config=ExtractionConfig(extract_resid_mid=True),
         )
         # assert that cache["resid_mid_0"] has shape (1,3,16)
@@ -175,11 +175,52 @@ class BaseHookedModelTestCase(unittest.TestCase):
             cache["resid_mid_0"].shape, (1, 4, self.MODEL.model_config.hidden_size)
         )
 
+    def test_hook_extract_head_key_value_keys(self):
+        self.MODEL.restore_original_modules()
+        cache = self.MODEL.forward(
+            self.INPUTS,
+            self.TARGET_TOKEN_POSITION,
+            pivot_positions=[4],
+            extraction_config=ExtractionConfig(
+                extract_head_keys=True,
+                extract_head_values=True,
+                extract_head_queries=True,
+            ),
+        )
+
+        # assert that cache have "values_L0H1" and "keys_L0H1" and "queries_L0H1"
+        self.assertIn("values_L0H1", cache)
+        self.assertEqual(
+            cache["values_L0H1"].shape, (1, 4, self.MODEL.model_config.head_dim)
+        )
+        self.assertIn("keys_L0H1", cache)
+        self.assertEqual(
+            cache["keys_L0H1"].shape, (1, 4, self.MODEL.model_config.head_dim)
+        )
+        self.assertIn("queries_L0H1", cache)
+        self.assertEqual(
+            cache["queries_L0H1"].shape, (1, 4, self.MODEL.model_config.head_dim)
+        )
+
+    def test_hook_extract_head_out(self):
+        cache = self.MODEL.forward(
+            self.INPUTS,
+            self.TARGET_TOKEN_POSITION,
+            pivot_positions=[4],
+            extraction_config=ExtractionConfig(extract_head_out=True),
+        )
+        # assert that cache["head_out_L0H1"] has shape (1, num_heads, 5, hidden_size)
+        self.assertIn("head_out_L0H1", cache)
+        self.assertEqual(
+            cache["head_out_L0H1"].shape,
+            (1, 4, self.MODEL.model_config.hidden_size),
+        )
+
     def test_hook_extract_attn_in(self):
         cache = self.MODEL.forward(
             self.INPUTS,
             self.TARGET_TOKEN_POSITION,
-            split_positions=[4],
+            pivot_positions=[4],
             extraction_config=ExtractionConfig(extract_attn_in=True),
         )
         # assert that cache["attn_in_0"] has shape (1, 4, )
@@ -192,7 +233,7 @@ class BaseHookedModelTestCase(unittest.TestCase):
         cache = self.MODEL.forward(
             self.INPUTS,
             self.TARGET_TOKEN_POSITION,
-            split_positions=[4],
+            pivot_positions=[4],
             extraction_config=ExtractionConfig(extract_attn_out=True),
         )
         # assert that cache["attn_out_0"] has shape (1, 4, )
@@ -205,7 +246,7 @@ class BaseHookedModelTestCase(unittest.TestCase):
         cache = self.MODEL.forward(
             self.INPUTS,
             self.TARGET_TOKEN_POSITION,
-            split_positions=[4],
+            pivot_positions=[4],
             extraction_config=ExtractionConfig(extract_mlp_out=True),
         )
         # assert that cache["mlp_out_0"] has shape (1, 4, )
@@ -218,7 +259,7 @@ class BaseHookedModelTestCase(unittest.TestCase):
         cache = self.MODEL.forward(
             self.INPUTS,
             self.TARGET_TOKEN_POSITION,
-            split_positions=[4],
+            pivot_positions=[4],
             extraction_config=ExtractionConfig(extract_resid_in_post_layernorm=True),
         )
         # assert that cache["resid_in_post_layernorm_0"] has shape (1, 4, 16)
@@ -227,7 +268,6 @@ class BaseHookedModelTestCase(unittest.TestCase):
             cache["resid_in_post_layernorm_0"].shape,
             (1, 4, self.MODEL.model_config.hidden_size),
         )
-        
 
     def test_hook_extract_avg_attn_pattern(self):
         external_cache = ActivationCache()
@@ -237,8 +277,10 @@ class BaseHookedModelTestCase(unittest.TestCase):
         cache = self.MODEL.forward(
             self.INPUTS,
             ["all"],
-            split_positions=[4],
-            extraction_config=ExtractionConfig(extract_attn_pattern=True, avg_over_example=True),
+            pivot_positions=[4],
+            extraction_config=ExtractionConfig(
+                extract_attn_pattern=True, avg_over_example=True
+            ),
             external_cache=external_cache,
             batch_idx=1,
         )
@@ -253,7 +295,7 @@ class BaseHookedModelTestCase(unittest.TestCase):
         cache = self.MODEL.forward(
             self.INPUTS,
             ["all"],
-            split_positions=[4],
+            pivot_positions=[4],
             extraction_config=ExtractionConfig(extract_attn_pattern=True),
         )
         print(cache.keys())
@@ -280,7 +322,7 @@ class BaseHookedModelTestCase(unittest.TestCase):
                 extract_attn_in=True,
             ),
         )
-        
+
         self.MODEL.set_custom_modules()
         cache_custom = self.MODEL.forward(
             self.INPUTS,
@@ -292,37 +334,39 @@ class BaseHookedModelTestCase(unittest.TestCase):
                 extract_attn_in=True,
             ),
         )
-        
+
         # assert that the output of the original model and the custom model are the same
         for key in cache_original.keys():
             if key in cache_custom:
                 if isinstance(cache_original[key], torch.Tensor):
                     if not torch.allclose(cache_original[key], cache_custom[key]):
                         print(f"Mismatch found in key: {key}")
-                    self.assertTrue(torch.allclose(cache_original[key], cache_custom[key]))
-                
+                    self.assertTrue(
+                        torch.allclose(cache_original[key], cache_custom[key])
+                    )
+
     def test_get_last_layernorm(self):
         norm = self.MODEL.get_last_layernorm()
         self.assertIsNotNone(norm)
-        
+
     def get_lm_head(self):
         unembed = self.MODEL.get_lm_head()
-        
+
         # assert is not None
         self.assertIsNotNone(unembed)
-        
+
     def test_generate(self):
-        pass # TODO: Implement this test
-    
+        pass  # TODO: Implement this test
+
     def test_generate_with_extract_cache(self):
         # TODO: Implement this test
         pass
-    
+
     def test_ablation_attn_matrix(self):
         ablation_cache = self.MODEL.forward(
             self.INPUTS,
             target_token_positions=["all"],
-            split_positions=[4],
+            pivot_positions=[4],
             extraction_config=ExtractionConfig(
                 extract_resid_out=True,
                 extract_attn_pattern=True,
@@ -330,16 +374,16 @@ class BaseHookedModelTestCase(unittest.TestCase):
             ablation_queries=[
                 {
                     "type": "std",
-                    "elem-to-ablate": "@position-group-0",
-                    "head-layer-couple": [[2,1]]
+                    "elem-to-ablate": "@inputs-partition-0",
+                    "head-layer-couple": [[2, 1]],
                 }
-            ]
+            ],
         )
-        
+
         # cache = self.MODEL.forward(
         #     self.INPUTS,
         #     target_token_positions=["last"],
-        #     split_positions=[4],
+        #     pivot_positions=[4],
         #     extraction_config=ExtractionConfig(
         #         extract_resid_out=True,
         #         extract_attn_pattern=True,
@@ -348,15 +392,16 @@ class BaseHookedModelTestCase(unittest.TestCase):
         # assert that cache["pattern_L1H1"] is in the cache
         self.assertIn("pattern_L1H1", ablation_cache)
         # assert that cache["resid_out_0"] has shape (1,self.input_size,self.input_size)
-        self.assertEqual(ablation_cache["pattern_L1H2"].shape, (1, self.input_size, self.input_size))
-        
-        self.assertEqual(ablation_cache["pattern_L1H2"][0,:4,:4].sum(), 0)  
-        
-        
+        self.assertEqual(
+            ablation_cache["pattern_L1H2"].shape, (1, self.input_size, self.input_size)
+        )
+
+        self.assertEqual(ablation_cache["pattern_L1H2"][0, :4, :4].sum(), 0)
 
     def test_patching(self):
         # TODO: Implement this test
         pass
+
 
 ################### BASE TEST CASES ######################
 class TestHookedTestModel(BaseHookedModelTestCase):

@@ -7,11 +7,12 @@ from functools import partial
 from easyroutine.interpretability.hooks import (
     ablate_attn_mat_hook,
     ablate_heads_hook,
-    ablate_tokens_hook_flash_attn
+    ablate_tokens_hook_flash_attn,
 )
 from easyroutine.interpretability.utils import preprocess_ablation_queries
 
 # The current version of AbaltionManager doesn't allow to ablate different kind of tokens in the same layer
+
 
 class AblationType(Enum):
     STD = "std"
@@ -93,7 +94,7 @@ class AblationManager:
             ),
             AblationType.FLASH_ATTN: AblationConfig(
                 type=AblationType.FLASH_ATTN,
-                hook_pos=self.model_config.attn_value_hook_name,
+                hook_pos=self.model_config.head_value_hook_name,
                 ablation_func=self._ablation_type_flash_attn_func,
                 hook_func=ablate_tokens_hook_flash_attn,
             ),
@@ -130,7 +131,9 @@ class AblationManager:
         self, ablation_type: AblationType, ablation_queries: pd.DataFrame, **kwargs
     ) -> List[Dict]:
         """Create hooks for a specific ablation type."""
-        if not set(ablation_queries["type"]).issubset(set(item.value for item in AblationType)):
+        if not set(ablation_queries["type"]).issubset(
+            set(item.value for item in AblationType)
+        ):
             raise ValueError("Invalid ablation type found in ablation queries.")
         type_specific_queries = ablation_queries[
             ablation_queries["type"] == ablation_type.value
@@ -150,9 +153,6 @@ class AblationManager:
 
         for ablation_type in AblationType:
             hooks.extend(self._create_hooks(ablation_type, self.ablation_queries))
-        
-        
-        
 
         return hooks
 
@@ -163,7 +163,9 @@ class AblationManager:
         ablation_queries = ablation_queries.copy()
         keys = self.token_to_pos(token=ablation_queries["elem-to-ablate"].values[0])
         ablation_queries["keys"] = [keys] * len(ablation_queries)
-        ablation_queries["queries"] = [self.token_to_pos(token="@all")] * len(ablation_queries)
+        ablation_queries["queries"] = [self.token_to_pos(token="@all")] * len(
+            ablation_queries
+        )
 
         ablation_queries.drop(columns=["elem-to-ablate"], inplace=True)
         hooks = self._create_hooks_list(AblationType.STD, ablation_queries)
@@ -181,9 +183,13 @@ class AblationManager:
         ablation_queries: pd.DataFrame,
     ):
         ablation_queries = ablation_queries.copy()
-        ablation_queries["keys"] = [self.token_to_pos(token="@all-image")] * len(ablation_queries)
-        ablation_queries["queries"] = [self.token_to_pos(token="@all-text")] * len(ablation_queries)
-        
+        ablation_queries["keys"] = [self.token_to_pos(token="@all-image")] * len(
+            ablation_queries
+        )
+        ablation_queries["queries"] = [self.token_to_pos(token="@all-text")] * len(
+            ablation_queries
+        )
+
         ablation_queries.drop(columns=["elem-to-ablate"], inplace=True)
         hooks = self._create_hooks_list(AblationType.BLOCK_IMG_TO_TXT, ablation_queries)
         return hooks
@@ -193,9 +199,13 @@ class AblationManager:
         ablation_queries: pd.DataFrame,
     ):
         ablation_queries = ablation_queries.copy()
-        ablation_queries["keys"] = [self.token_to_pos(token="@all-image")] * len(ablation_queries)
-        ablation_queries["queries"] = [self.token_to_pos(token="@all-image")] * len(ablation_queries)
-        
+        ablation_queries["keys"] = [self.token_to_pos(token="@all-image")] * len(
+            ablation_queries
+        )
+        ablation_queries["queries"] = [self.token_to_pos(token="@all-image")] * len(
+            ablation_queries
+        )
+
         ablation_queries = ablation_queries.drop(columns=["elem-to-ablate"])
         hooks = self._create_hooks_list(AblationType.BLOCK_IMG_TO_IMG, ablation_queries)
         return hooks
@@ -212,16 +222,21 @@ class AblationManager:
         self,
         ablation_queries: pd.DataFrame,
     ):
-        keys = list(set(self.token_to_pos(token="@all-image")) - set(self.token_to_pos(
-            token="@special-pixtral"
-        )))
+        keys = list(
+            set(self.token_to_pos(token="@all-image"))
+            - set(self.token_to_pos(token="@special-pixtral"))
+        )
         ablation_queries["keys"] = [keys] * len(ablation_queries)
-        ablation_queries["queries"] = [self.token_to_pos(token="@all-text")] * len(ablation_queries)
+        ablation_queries["queries"] = [self.token_to_pos(token="@all-text")] * len(
+            ablation_queries
+        )
 
         ablation_queries = ablation_queries.drop(columns=["elem-to-ablate"])
-        hooks = self._create_hooks_list(AblationType.BLOCK_IMG_TO_TXT_WOUT_SPECIAL_PIXTRAL, ablation_queries)
+        hooks = self._create_hooks_list(
+            AblationType.BLOCK_IMG_TO_TXT_WOUT_SPECIAL_PIXTRAL, ablation_queries
+        )
         return hooks
-    
+
     def _ablation_type_flash_attn_func(
         self,
         ablation_queries: pd.DataFrame,
@@ -229,32 +244,42 @@ class AblationManager:
         ablation_queries = ablation_queries.copy()
         keys = self.token_to_pos(token=ablation_queries["elem-to-ablate"].values[0])
         ablation_queries["keys"] = [keys] * len(ablation_queries)
-        ablation_queries["queries"] = [self.token_to_pos(token="@all")] * len(ablation_queries)
-        
+        ablation_queries["queries"] = [self.token_to_pos(token="@all")] * len(
+            ablation_queries
+        )
+
         ablation_queries.drop(columns=["elem-to-ablate"], inplace=True)
         hooks = self._create_hooks_list(AblationType.FLASH_ATTN, ablation_queries)
         return hooks
-    
+
     def _ablation_type_flash_block_img_to_txt_func(
         self,
         ablation_queries: pd.DataFrame,
     ):
         ablation_queries = ablation_queries.copy()
-        ablation_queries["keys"] = [self.token_to_pos(token="@all-image")] * len(ablation_queries)
-        ablation_queries["queries"] = [self.token_to_pos(token="@all-text")] * len(ablation_queries)
-        
+        ablation_queries["keys"] = [self.token_to_pos(token="@all-image")] * len(
+            ablation_queries
+        )
+        ablation_queries["queries"] = [self.token_to_pos(token="@all-text")] * len(
+            ablation_queries
+        )
+
         ablation_queries.drop(columns=["elem-to-ablate"], inplace=True)
         hooks = self._create_hooks_list(AblationType.FLASH_ATTN, ablation_queries)
         return hooks
-    
+
     def _ablation_type_flash_block_img_to_img_func(
         self,
         ablation_queries: pd.DataFrame,
     ):
         ablation_queries = ablation_queries.copy()
-        ablation_queries["keys"] = [self.token_to_pos(token="@all-image")] * len(ablation_queries)
-        ablation_queries["queries"] = [self.token_to_pos(token="@all-image")] * len(ablation_queries)
-        
+        ablation_queries["keys"] = [self.token_to_pos(token="@all-image")] * len(
+            ablation_queries
+        )
+        ablation_queries["queries"] = [self.token_to_pos(token="@all-image")] * len(
+            ablation_queries
+        )
+
         ablation_queries.drop(columns=["elem-to-ablate"], inplace=True)
         hooks = self._create_hooks_list(AblationType.FLASH_ATTN, ablation_queries)
         return hooks

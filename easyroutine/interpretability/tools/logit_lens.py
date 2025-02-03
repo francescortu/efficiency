@@ -6,6 +6,7 @@ from easyroutine.interpretability.hooked_model import HookedModel
 from easyroutine.logger import Logger
 from tqdm import tqdm
 from copy import deepcopy
+import re
 
 class LogitLens:
     def __init__(self, unembedding_matrix, last_layer_norm: nn.Module, model_name: str):
@@ -44,27 +45,60 @@ class LogitLens:
     def get_vocab_size(self):
         return self.unembed.shape[1]
     
-    def get_keys(self, activations: ActivationCache, key: str):
-        # check if is a format key ("resid_out_{i}")
-        keys = []
-        if "{i}" in key:
-            # check if exists and how many starting from 0
-            i = 0
-            while activations.get(f"{key.format(i=i)}") is not None:
-                keys.append(f"{key.format(i=i)}")
-                i += 1
-            if i == 0:
-                raise KeyError(f"Key {key} not found in activations")
-            else:
-                self.logger.info(f"Key {key} found in activations with {i} elements")
-                return keys
-        else:
-            if activations.get(key) is None:
-                raise KeyError(f"Key {key} not found in activations")
-            else:
-                self.logger.info(f"Key {key} found in activations")
-                return [key]
+    # def get_keys(self, activations: ActivationCache, key: str):
+    #     # check if is a format key ("resid_out_{i}")
+    #     keys = []
+    #     if "{i}" in key:
+    #         # check if exists and how many starting from 0
+    #         i = 0
+    #         while activations.get(f"{key.format(i=i)}") is not None:
+    #             keys.append(f"{key.format(i=i)}")
+    #             i += 1
+    #         if i == 0:
+    #             raise KeyError(f"Key {key} not found in activations")
+    #         else:
+    #             self.logger.info(f"Key {key} found in activations with {i} elements")
+    #             return keys
+    #     else:
+    #         if activations.get(key) is None:
+    #             raise KeyError(f"Key {key} not found in activations")
+    #         else:
+    #             self.logger.info(f"Key {key} found in activations")
+    #             return [key]
 
+
+    def get_keys(self, activations, key_pattern: str):
+        """
+        Given an ActivationCache `activations` and a key pattern containing placeholders
+        (e.g. "head_out_L{i}H{j}"), generate all keys present in the cache that match this pattern.
+        
+        This implementation converts the pattern into a regex by replacing each placeholder 
+        with a regex group that matches one or more digits.
+        """
+        # If no placeholders are found, check for the literal key.
+        if "{" not in key_pattern:
+            if activations.get(key_pattern) is None:
+                raise KeyError(f"Key {key_pattern} not found in activations")
+            return [key_pattern]
+
+        # Escape the literal parts of the key pattern.
+        regex_pattern = re.escape(key_pattern)
+        # Replace escaped placeholders (e.g. "\{i\}") with a regex group for digits.
+        regex_pattern = re.sub(r'\\\{.*?\\\}', r'(\\d+)', regex_pattern)
+        regex_compiled = re.compile(f"^{regex_pattern}$")
+
+        # Collect all keys that match this regex.
+        matching_keys = [k for k in activations.keys() if regex_compiled.fullmatch(k)]
+        
+        if not matching_keys:
+            raise KeyError(f"No keys found for pattern {key_pattern}")
+
+        # Sort keys numerically based on the numbers embedded in them.
+        def sort_key(s):
+            return [int(x) for x in re.findall(r'\d+', s)]
+        
+        return sorted(matching_keys, key=sort_key)
+    
     def compute(
         self,
         activations: ActivationCache,

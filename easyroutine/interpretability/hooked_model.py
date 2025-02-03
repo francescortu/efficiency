@@ -1202,7 +1202,7 @@ class HookedModel:
         )
         all_cache.update(attn_pattern)
         all_cache["example_dict"] = example_dict
-        self.logger.info("Aggregation finished", std_out=True)
+        # self.logger.info("Aggregation finished", std_out=True)
 
         torch.cuda.empty_cache()
         return all_cache

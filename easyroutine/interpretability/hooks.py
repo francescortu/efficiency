@@ -175,7 +175,7 @@ def head_out_hook(
     # reshape the weights to have the head dimension
     o_proj_weight = einops.rearrange(
         o_proj_weight,
-        "(num_heads head_dim) d_model -> num_heads head_dim d_model",
+        "d_model (num_heads head_dim) -> num_heads head_dim d_model",
         num_heads=num_heads,
         head_dim=head_dim
     )

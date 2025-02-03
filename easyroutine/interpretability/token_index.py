@@ -10,7 +10,7 @@ def load_config(yaml_file: str) -> dict:
     with open(yaml_file, 'r') as file:
         return yaml.safe_load(file)
 
-config = load_config("easyroutine/interpretability/config/config.yaml")
+config = load_config("easyroutine/easyroutine/interpretability/config/config.yaml")
 
 SUPPORTED_MODELS = config['models']
 SUPPORTED_TOKENS = config['token_position']

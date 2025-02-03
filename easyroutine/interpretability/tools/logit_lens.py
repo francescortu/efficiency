@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import Union
+from typing import Union, Optional, Tuple, List
 from easyroutine.interpretability.activation_cache import ActivationCache
 from easyroutine.interpretability.hooked_model import HookedModel
 from easyroutine.logger import Logger
@@ -69,6 +69,7 @@ class LogitLens:
         self,
         activations: ActivationCache,
         target_key: str,
+        token_directions: Optional[Union[List[int], List[Tuple[int,int]]]] = None,
         apply_norm: bool = True,
         apply_softmax: bool = False,
     ) -> dict:
@@ -90,16 +91,34 @@ class LogitLens:
         logit_lens = {}
         for key in tqdm(keys, total=len(keys), desc=f"Computing Logit Lens of {target_key}"):
             act = activations.get(key).to(self.device())
-            if apply_norm:
-                act = self.norm(act)
-            logits = torch.matmul(act, self.unembed.T)
-            if apply_softmax:
-                logits = torch.softmax(logits, dim=-1)
-            logit_lens[f"logit_lens_{key}"] = logits
             
+            if token_directions is not None:
+                assert len(token_directions) == act.shape[0], "Token directions must have the same length of the example in the activations"
+                
+                batch_size = act.shape[0]
+                seq_len = act.shape[1] if len(act.shape) > 2 else 1
+                logits = torch.zeros(batch_size, seq_len, device=act.device)
+                
+                for i, direction in enumerate(token_directions):
+                    if isinstance(direction, tuple):
+                        tok1, tok2 = direction
+                        direction_vector = self.unembed[tok1] - self.unembed[tok2]
+                    else:
+                        direction_vector = self.unembed[direction]
+                    
+                    curr_act = act[i] if len(act.shape) == 2 else act[i].reshape(-1, act.shape[-1])
+                    if apply_norm:
+                        curr_act = self.norm(curr_act)
+                    
+                    logits[i] = torch.matmul(curr_act, direction_vector)
+                
+                logit_lens[f"logit_lens_{key}"] = logits
+            else:
+                if apply_norm:
+                    act = self.norm(act)
+                logits = torch.matmul(act, self.unembed.T)
+                if apply_softmax:
+                    logits = torch.softmax(logits, dim=-1)
+                logit_lens[f"logit_lens_{key}"] = logits
+        
         return logit_lens
-            
-    
-
-
-    

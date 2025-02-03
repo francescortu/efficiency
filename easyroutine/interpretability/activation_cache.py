@@ -7,7 +7,7 @@ import contextlib
 class ActivationItem():
     def __init__(self, value, shape_info:str):
         self.value = value
-        self.shape = shape
+        self.shape = shape_info
     
     def __repr__(self):
         return f"ActivationItem({self.value}, {self.shape})"

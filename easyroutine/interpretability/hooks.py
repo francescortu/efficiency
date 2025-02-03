@@ -161,6 +161,8 @@ def head_out_hook(
     cache_key,
     token_index,
     layer,
+    num_heads,
+    head_dim,
     o_proj_weight,
     o_proj_bias,
     head: Union[str, int] = "all",
@@ -168,33 +170,40 @@ def head_out_hook(
 ):
     b = process_args_kwargs_output(args, kwargs, output)
     
-    bsz, num_heads, seq_len, head_dim = b.shape
-    
+    bsz, seq_len, hidden_size = b.shape
+    b = b.view(bsz, seq_len, num_heads, head_dim)
     # reshape the weights to have the head dimension
     o_proj_weight = einops.rearrange(
         o_proj_weight,
-        "d_model d_model -> num_heads head_dim d_model",
+        "(num_heads head_dim) d_model -> num_heads head_dim d_model",
+        num_heads=num_heads,
+        head_dim=head_dim
     )
     
     # apply the projection
     projected_values = einsum(
         b,
         o_proj_weight,
-        "batch seq_len num_head d_model, num_head head_dim d_model -> batch seq_len num_head head_dim",
+        "batch seq_len num_head d_head, num_head head_dim d_model -> batch seq_len num_head d_model",
     )
     
     if o_proj_bias is not None:
         projected_values = projected_values + o_proj_bias
         
     # slice for token index
-    projected_values = projected_values[:, :, token_index, :]
+    projected_values = projected_values[:, token_index, :,:]
     
     if avg:
         projected_values = torch.mean(projected_values, dim=-2, keepdim=True)
     
     heads = [idx for idx in range(num_heads)] if head == "all" else [head]
     for head_idx in heads:
-        cache[f"{cache_key}L{layer}H{head_idx}"] = projected_values[:, int(head_idx)] 
+        cache.add_with_info(
+            f"{cache_key}L{layer}H{head_idx}",
+            projected_values[:, :, int(head_idx),:],
+            "Shape: batch selected_inputs_ids_len, d_model",
+        )
+        # cache[f"{cache_key}L{layer}H{head_idx}"] = projected_values[:,:, int(head_idx),:] 
         
 
 def zero_ablation(tensor):

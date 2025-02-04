@@ -3,14 +3,17 @@ from typing import Dict, List, Optional, Tuple, Union
 from typing_extensions import Literal
 import random
 import yaml
+import importlib.resources
+
 
 
 # Load the YAML configuration file
-def load_config(yaml_file: str) -> dict:
-    with open(yaml_file, "r") as file:
+def load_config() -> dict:
+    with importlib.resources.open_text("easyroutine.interpretability.config", "config.yaml") as file:
         return yaml.safe_load(file)
 
-config = load_config("easyroutine/easyroutine/interpretability/config/config.yaml")
+
+config = load_config()
 
 SUPPORTED_MODELS = config["models"]
 SUPPORTED_TOKENS = config["token_position"]

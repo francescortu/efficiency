@@ -1,9 +1,10 @@
 import unittest
+import os
 import torch
 from easyroutine.interpretability.activation_cache import ActivationCache
 
-class TestActivationCache(unittest.TestCase):
 
+class TestActivationCache(unittest.TestCase):
     def setUp(self):
         """
         Setup the test case by initializing necessary ActivationCache instances.
@@ -25,14 +26,18 @@ class TestActivationCache(unittest.TestCase):
         """
         self.cache1.cat(self.cache2)
 
-        self.assertTrue(torch.equal(self.cache1["values_0"], torch.tensor([1, 2, 3, 4])))
+        self.assertTrue(
+            torch.equal(self.cache1["values_0"], torch.tensor([1, 2, 3, 4]))
+        )
         self.assertEqual(self.cache1["mapping_index"], [0, 1])
 
     def test_register_aggregation(self):
         """
         Test custom aggregation strategies.
         """
-        self.cache1.register_aggregation("values_", lambda values: torch.stack(values, dim=0))
+        self.cache1.register_aggregation(
+            "values_", lambda values: torch.stack(values, dim=0)
+        )
         self.cache1.cat(self.cache2)
 
         expected = torch.stack([torch.tensor([1, 2]), torch.tensor([3, 4])], dim=0)
@@ -45,7 +50,9 @@ class TestActivationCache(unittest.TestCase):
         with self.cache1.deferred_mode():
             self.cache1.cat(self.cache2)
 
-        self.assertTrue(torch.equal(self.cache1["values_0"], torch.tensor([1, 2, 3, 4])))
+        self.assertTrue(
+            torch.equal(self.cache1["values_0"], torch.tensor([1, 2, 3, 4]))
+        )
         self.assertEqual(self.cache1["mapping_index"], [0, 1])
 
     def test_key_mismatch(self):
@@ -66,12 +73,33 @@ class TestActivationCache(unittest.TestCase):
 
         self.assertTrue(torch.equal(empty_cache["values_0"], torch.tensor([1, 2])))
         self.assertEqual(empty_cache["mapping_index"], [0, 1])
-        
+
     def test_add_with_info(self):
-        self.cache1.add_with_info("values_0", torch.tensor([5, 6]), "informative_string")
-        self.assertTrue(torch.equal(self.cache1["values_0"].value(), torch.tensor([5, 6])))
+        self.cache1.add_with_info(
+            "values_0", torch.tensor([5, 6]), "informative_string"
+        )
+        self.assertTrue(
+            torch.equal(self.cache1["values_0"].value(), torch.tensor([5, 6]))
+        )
         self.assertEqual(self.cache1["values_0"].info(), "informative_string")
-        
+
+    def test_torch_save_and_load(self):
+        # make a tmp folder
+        os.makedirs("tmp", exist_ok=True)
+        try:
+            torch.save(self.cache1, "tmp/test.pth")
+        except Exception as e:
+            self.fail(f"torch.save failed with exception: {e}")
+        try:
+            cache = torch.load("tmp/test.pth")
+        except Exception as e:
+            self.fail(f"torch.load failed with exception: {e}")
+
+        self.assertTrue(torch.equal(cache["values_0"], torch.tensor([1, 2])))
+
+        # clean up
+        os.remove("tmp/test.pth")
+
 
 if __name__ == "__main__":
     unittest.main()

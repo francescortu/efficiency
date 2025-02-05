@@ -148,6 +148,18 @@ class BaseHookedModelTestCase(unittest.TestCase):
         self.assertEqual(
             cache["resid_out_0"].shape, (1, 4, self.MODEL.model_config.hidden_size)
         )
+        
+    def test_hook_resid_out_avg(self):
+        cache = self.MODEL.forward(
+            self.INPUTS,
+            self.TARGET_TOKEN_POSITION + ["all"],
+            pivot_positions=[4],
+            extraction_config=ExtractionConfig(extract_resid_out=True, avg=True),
+        )
+        self.assertIn("resid_out_0", cache)
+        self.assertEqual(
+            cache["resid_out_0"].shape, (1, 2, self.MODEL.model_config.hidden_size)
+        )
 
     def test_hook_resid_in(self):
         cache = self.MODEL.forward(
@@ -161,6 +173,18 @@ class BaseHookedModelTestCase(unittest.TestCase):
         self.assertEqual(
             cache["resid_in_0"].shape, (1, 4, self.MODEL.model_config.hidden_size)
         )
+        
+    def test_hook_resid_in_avg(self):
+        cache = self.MODEL.forward(
+            self.INPUTS,
+            self.TARGET_TOKEN_POSITION + ["all"],
+            pivot_positions=[4],
+            extraction_config=ExtractionConfig(extract_resid_in=True, avg=True),
+        )
+        self.assertIn("resid_in_0", cache)
+        self.assertEqual(
+            cache["resid_in_0"].shape, (1, 2, self.MODEL.model_config.hidden_size)
+        )
 
     def test_hook_resid_mid(self):
         cache = self.MODEL.forward(
@@ -173,6 +197,18 @@ class BaseHookedModelTestCase(unittest.TestCase):
         self.assertIn("resid_mid_0", cache)
         self.assertEqual(
             cache["resid_mid_0"].shape, (1, 4, self.MODEL.model_config.hidden_size)
+        )
+        
+    def test_hook_resid_mid_avg(self):
+        cache = self.MODEL.forward(
+            self.INPUTS,
+            self.TARGET_TOKEN_POSITION + ["all"],
+            pivot_positions=[4],
+            extraction_config=ExtractionConfig(extract_resid_mid=True, avg=True),
+        )
+        self.assertIn("resid_mid_0", cache)
+        self.assertEqual(
+            cache["resid_mid_0"].shape, (1, 2, self.MODEL.model_config.hidden_size)
         )
 
     def test_hook_extract_head_key_value_keys(self):
@@ -200,6 +236,34 @@ class BaseHookedModelTestCase(unittest.TestCase):
         self.assertIn("queries_L0H1", cache)
         self.assertEqual(
             cache["queries_L0H1"].shape, (1, 4, self.MODEL.model_config.head_dim)
+        )
+        
+    def test_hook_extract_head_key_value_keys_avg(self):
+        self.MODEL.restore_original_modules()
+        cache = self.MODEL.forward(
+            self.INPUTS,
+            self.TARGET_TOKEN_POSITION + ["all"],
+            pivot_positions=[4],
+            extraction_config=ExtractionConfig(
+                extract_head_keys=True,
+                extract_head_values=True,
+                extract_head_queries=True,
+                avg=True,
+            ),
+        )
+
+        # assert that cache have "values_L0H1" and "keys_L0H1" and "queries_L0H1"
+        self.assertIn("values_L0H1", cache)
+        self.assertEqual(
+            cache["values_L0H1"].shape, (1, 2, self.MODEL.model_config.head_dim)
+        )
+        self.assertIn("keys_L0H1", cache)
+        self.assertEqual(
+            cache["keys_L0H1"].shape, (1, 2, self.MODEL.model_config.head_dim)
+        )
+        self.assertIn("queries_L0H1", cache)
+        self.assertEqual(
+            cache["queries_L0H1"].shape, (1, 2, self.MODEL.model_config.head_dim)
         )
 
     def test_hook_extract_head_out(self):
@@ -269,7 +333,7 @@ class BaseHookedModelTestCase(unittest.TestCase):
             (1, 4, self.MODEL.model_config.hidden_size),
         )
 
-    def test_hook_extract_avg_attn_pattern(self):
+    def test_hook_extract_avg_over_examples_attn_pattern(self):
         external_cache = ActivationCache()
         external_cache["avg_pattern_L1H1"] = torch.randn(
             1, self.input_size, self.input_size
@@ -303,6 +367,20 @@ class BaseHookedModelTestCase(unittest.TestCase):
         self.assertIn("pattern_L1H1", cache)
         self.assertEqual(
             cache["pattern_L1H1"].shape, (1, self.input_size, self.input_size)
+        )
+        
+    def test_hook_extract_attn_pattern_avg(self):
+        cache = self.MODEL.forward(
+            self.INPUTS,
+            ["all", "last"],
+            pivot_positions=[4],
+            extraction_config=ExtractionConfig(extract_attn_pattern=True, avg=True),
+        )
+        
+        # assert that cache["attn_pattern_0"] has shape (1, 4, 16, 16)
+        self.assertIn("pattern_L1H1", cache)
+        self.assertEqual(
+            cache["pattern_L1H1"].shape, (1,2)
         )
 
     def test_module_wrapper(self):

@@ -401,12 +401,12 @@ class HookedModel:
         self,
         inputs,
         cache: ActivationCache,
-        token_index: List,
+        token_indexes: List,
         token_dict: Dict,
         # string_tokens: List[str],
         extraction_config: ExtractionConfig = ExtractionConfig(),
         patching_queries: Optional[Union[dict, pd.DataFrame]] = None,
-        ablation_queries: Optional[Union[dict, pd.DataFrame]] = None,
+        ablation_queries: Optional[dict] = None,
         batch_idx: Optional[int] = None,
         external_cache: Optional[ActivationCache] = None,
     ):
@@ -457,7 +457,7 @@ class HookedModel:
                         save_resid_hook,
                         cache=cache,
                         cache_key=f"resid_out_{i}",
-                        token_index=token_index,
+                        token_indexes=token_indexes,
                         avg=extraction_config.avg,
                     ),
                 }
@@ -474,7 +474,7 @@ class HookedModel:
                         save_resid_hook,
                         cache=cache,
                         cache_key=f"resid_in_{i}",
-                        token_index=token_index,
+                        token_indexes=token_indexes,
                         avg=extraction_config.avg,
                     ),
                 }
@@ -491,7 +491,7 @@ class HookedModel:
                         save_resid_hook,
                         cache=cache,
                         cache_key=f"resid_in_post_layernorm_{i}",
-                        token_index=token_index,
+                        token_indexes=token_indexes,
                         avg=extraction_config.avg,
                     ),
                 }
@@ -518,7 +518,7 @@ class HookedModel:
                         query_key_value_hook,
                         cache=cache,
                         cache_key="queries_",
-                        token_index=token_index,
+                        token_indexes=token_indexes,
                         head_dim=self.model_config.head_dim,
                         avg=extraction_config.avg,
                         layer=i,
@@ -537,7 +537,7 @@ class HookedModel:
                         query_key_value_hook,
                         cache=cache,
                         cache_key="values_",
-                        token_index=token_index,
+                        token_indexes=token_indexes,
                         head_dim=self.model_config.head_dim,
                         avg=extraction_config.avg,
                         layer=i,
@@ -556,7 +556,7 @@ class HookedModel:
                         query_key_value_hook,
                         cache=cache,
                         cache_key="keys_",
-                        token_index=token_index,
+                        token_indexes=token_indexes,
                         head_dim=self.model_config.head_dim,
                         avg=extraction_config.avg,
                         layer=i,
@@ -577,7 +577,7 @@ class HookedModel:
                         head_out_hook,
                         cache=cache,
                         cache_key="head_out_",
-                        token_index=token_index,
+                        token_indexes=token_indexes,
                         avg=extraction_config.avg,
                         layer=i,
                         head=head,
@@ -604,7 +604,7 @@ class HookedModel:
                         save_resid_hook,
                         cache=cache,
                         cache_key=f"attn_in_{i}",
-                        token_index=token_index,
+                        token_indexes=token_indexes,
                         avg=extraction_config.avg,
                     ),
                 }
@@ -619,7 +619,7 @@ class HookedModel:
                         save_resid_hook,
                         cache=cache,
                         cache_key=f"attn_out_{i}",
-                        token_index=token_index,
+                        token_indexes=token_indexes,
                         avg=extraction_config.avg,
                     ),
                 }
@@ -659,7 +659,7 @@ class HookedModel:
                         save_resid_hook,
                         cache=cache,
                         cache_key=f"resid_mid_{i}",
-                        token_index=token_index,
+                        token_indexes=token_indexes,
                         avg=extraction_config.avg,
                     ),
                 }
@@ -675,7 +675,7 @@ class HookedModel:
                         save_resid_hook,
                         cache=cache,
                         cache_key=f"mlp_out_{i}",
-                        token_index=token_index,
+                        token_indexes=token_indexes,
                         avg=extraction_config.avg,
                     ),
                 }
@@ -781,7 +781,7 @@ class HookedModel:
                     "intervention": partial(
                         projected_value_vectors_head,
                         cache=cache,
-                        token_index=token_index,
+                        token_indexes=token_indexes,
                         layer=i,
                         num_attention_heads=self.model_config.num_attention_heads,
                         num_key_value_heads=self.model_config.num_key_value_heads,
@@ -803,7 +803,7 @@ class HookedModel:
             ]
 
         if extraction_config.extract_attn_pattern:
-            if extraction_config.avg:
+            if extraction_config.avg_over_example:
                 if external_cache is None:
                     self.logger.warning(
                         """The external_cache is None. The average could not be computed since missing an external cache where store the iterations.
@@ -825,7 +825,7 @@ class HookedModel:
                             ),
                             "intervention": partial(
                                 avg_attention_pattern_head,
-                                token_index=token_index,
+                                token_indexes=token_indexes,
                                 layer=i,
                                 attn_pattern_current_avg=external_cache,
                                 batch_idx=batch_idx,
@@ -842,10 +842,11 @@ class HookedModel:
                         "component": self.model_config.attn_matrix_hook_name.format(i),
                         "intervention": partial(
                             attention_pattern_head,
-                            token_index=token_index,
+                            token_indexes=token_indexes,
                             cache=cache,
                             layer=i,
                             head=head,
+                            avg=extraction_config.avg,
                         ),
                     }
                     for i, head in zip(layer_indexes, head_indexes)
@@ -902,20 +903,20 @@ class HookedModel:
         string_tokens = self.to_string_tokens(
             self.input_handler.get_input_ids(inputs).squeeze()
         )
-        token_index, token_dict = TokenIndex(
+        token_indexes, token_dict = TokenIndex(
             self.config.model_name, pivot_positions=pivot_positions
         ).get_token_index(
             tokens=target_token_positions,
             string_tokens=string_tokens,
             return_type="all",
         )
-        assert isinstance(token_index, list), "Token index must be a list"
+        assert isinstance(token_indexes, list), "Token index must be a list"
         assert isinstance(token_dict, dict), "Token dict must be a dict"
 
         hooks = self.create_hooks(  # TODO: add **kwargs
             inputs=inputs,
             token_dict=token_dict,
-            token_index=token_index,
+            token_indexes=token_indexes,
             cache=cache,
             extraction_config=extraction_config,
             ablation_queries=ablation_queries,
@@ -1093,15 +1094,15 @@ class HookedModel:
             string_tokens = self.to_string_tokens(
                 self.input_handler.get_input_ids(inputs).squeeze()
             )
-            token_index, token_dict = TokenIndex(
+            token_indexes, token_dict = TokenIndex(
                 self.config.model_name, pivot_positions=None
             ).get_token_index(tokens=[], string_tokens=string_tokens, return_type="all")
-            assert isinstance(token_index, list), "Token index must be a list"
+            assert isinstance(token_indexes, list), "Token index must be a list"
             assert isinstance(token_dict, dict), "Token dict must be a dict"
             hooks = self.create_hooks(
                 inputs=inputs,
                 token_dict=token_dict,
-                token_index=token_index,
+                token_indexes=token_indexes,
                 cache=ActivationCache(),
                 **kwargs,
             )
@@ -1202,7 +1203,7 @@ class HookedModel:
         )
         all_cache.update(attn_pattern)
         all_cache["example_dict"] = example_dict
-        self.logger.info("Aggregation finished", std_out=True)
+        # self.logger.info("Aggregation finished", std_out=True)
 
         torch.cuda.empty_cache()
         return all_cache

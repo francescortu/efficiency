@@ -66,7 +66,7 @@ def save_resid_hook(
     output,
     cache: ActivationCache,
     cache_key,
-    token_index,
+    token_indexes,
     avg: bool = False,
 ):
     r"""
@@ -75,10 +75,23 @@ def save_resid_hook(
     b = process_args_kwargs_output(args, kwargs, output)
 
     # slice the tensor to get the activations of the token we want to extract
-    cache[cache_key] = b.data.detach().clone()[..., token_index, :]
-
     if avg:
-        cache[cache_key] = torch.mean(cache[cache_key], dim=-2, keepdim=True)
+        token_avgs = []
+        for token_index in token_indexes:
+            slice_ = b.data.detach().clone()[..., list(token_index), :]
+            token_avgs.append(torch.mean(slice_, dim=-2, keepdim=True))
+            
+        # cache[cache_key] = torch.cat(token_avgs, dim=-2)
+        cache.add_with_info(
+            cache_key,
+            torch.cat(token_avgs, dim=-2),
+            "Shape: batch avg_over_target_token_position, d_model",
+        )
+        
+    else:
+        flatten_indexes = [item for sublist in token_indexes for item in sublist]
+        cache[cache_key] = b.data.detach().clone()[..., flatten_indexes, :]
+
 
 
 def query_key_value_hook(
@@ -88,7 +101,7 @@ def query_key_value_hook(
     output,
     cache: ActivationCache,
     cache_key,
-    token_index,
+    token_indexes,
     layer,
     head_dim,
     num_key_value_groups:int,
@@ -109,20 +122,38 @@ def query_key_value_hook(
 
     heads = [idx for idx in range(b.size(1))] if head == "all" else [head]
     for head_idx in heads:
-        # compute group index
+        # Compute the group index for keys/values if needed.
         group_idx = head_idx // (b.size(1) // num_key_value_groups)
+        # Decide whether to use group_idx or head_idx based on cache_key.
         if "values_" in cache_key or "keys_" in cache_key:
-            cache.add_with_info(
-                f"{cache_key}L{layer}H{head_idx}",
-                b.data.detach().clone()[:, group_idx, token_index, :],
-                info_string,
-            )
+            # Select the slice corresponding to the group index.
+            tensor_slice = b.data.detach().clone()[:, group_idx, ...]
         else:
-            cache.add_with_info(
-                f"{cache_key}L{layer}H{head_idx}",
-                b.data.detach().clone()[:, head_idx, token_index, :],
-                info_string,
-            )
+            # Use the head index directly.
+            tensor_slice = b.data.detach().clone()[:, head_idx, ...]
+
+        # Process the token indexes.
+        if avg:
+            # For each token tuple, average over the tokens.
+            # Note: After slicing, the token dimension is the first dimension of tensor_slice,
+            # i.e. tensor_slice has shape (batch, tokens, d_head) so we average along dim=1.
+            tokens_avgs = []
+            for token_tuple in token_indexes:
+                # Slice tokens using the token_tuple.
+                token_subslice = tensor_slice[:, list(token_tuple), :]
+                # Average over the token dimension (dim=1) and keep that dimension.
+                token_avg = torch.mean(token_subslice, dim=1, keepdim=True)
+                tokens_avgs.append(token_avg)
+            # Concatenate the averages along the token dimension (dim=1).
+            processed_tokens = torch.cat(tokens_avgs, dim=1)
+        else:
+            # Flatten the token indexes from the list of tuples.
+            flatten_indexes = [item for tup in token_indexes for item in tup]
+            processed_tokens = tensor_slice[:, flatten_indexes, :]
+
+        # Build a unique key for the cache by including layer and head information.
+        key = f"{cache_key}L{layer}H{head_idx}"
+        cache.add_with_info(key, processed_tokens, info_string)
 
 
 def avg_hook(
@@ -159,7 +190,7 @@ def head_out_hook(
     output,
     cache,
     cache_key,
-    token_index,
+    token_indexes,
     layer,
     num_heads,
     head_dim,
@@ -190,20 +221,33 @@ def head_out_hook(
     if o_proj_bias is not None:
         projected_values = projected_values + o_proj_bias
         
-    # slice for token index
-    projected_values = projected_values[:, token_index, :,:]
-    
+    # Process token indexes from projected_values of shape [batch, tokens, num_heads, d_model]
     if avg:
-        projected_values = torch.mean(projected_values, dim=-2, keepdim=True)
-    
-    heads = [idx for idx in range(num_heads)] if head == "all" else [head]
+        # For each tuple, slice out the corresponding tokens and average over them.
+        token_avgs = []
+        for token_tuple in token_indexes:
+            # Slice out the tokens specified by the tuple.
+            token_slice = projected_values[:, list(token_tuple), :, :]
+            # Average over the token dimension (dim=1) and keep that dimension.
+            token_avg = torch.mean(token_slice, dim=1, keepdim=True)
+            token_avgs.append(token_avg)
+        # Concatenate the per-tuple averages along the token dimension.
+        projected_values = torch.cat(token_avgs, dim=1)
+    else:
+        # Flatten the list of tuples into a single list of token indexes.
+        flatten_indexes = [item for tup in token_indexes for item in tup]
+        projected_values = projected_values[:, flatten_indexes, :, :]
+
+    # Determine the heads to process.
+    heads = list(range(num_heads)) if head == "all" else [head]
     for head_idx in heads:
         cache.add_with_info(
             f"{cache_key}L{layer}H{head_idx}",
-            projected_values[:, :, int(head_idx),:],
+            # Select the corresponding head (axis 2).
+            projected_values[:, :, int(head_idx), :],
             "Shape: batch selected_inputs_ids_len, d_model",
         )
-        # cache[f"{cache_key}L{layer}H{head_idx}"] = projected_values[:,:, int(head_idx),:] 
+
         
 
 def zero_ablation(tensor):
@@ -259,47 +303,47 @@ def ablate_attn_mat_hook(
     return b
 
 
-def ablate_tokens_hook_flash_attn(
-    module,
-    args,
-    kwargs,
-    output,
-    ablation_queries: pd.DataFrame,
-    num_layers: int = 32,
-):
-    r"""
-    same of ablate_tokens_hook but for flash attention. This apply the ablation on the values vectors instead of the attention mask
-    """
-    b = process_args_kwargs_output(args, kwargs, output)
-    batch_size, seq, d_model = b.shape
-    if seq == 1:
-        return b
-    values = b.clone().data
-    device = values.device
+# def ablate_tokens_hook_flash_attn(
+#     module,
+#     args,
+#     kwargs,
+#     output,
+#     ablation_queries: pd.DataFrame,
+#     num_layers: int = 32,
+# ):
+#     r"""
+#     same of ablate_tokens_hook but for flash attention. This apply the ablation on the values vectors instead of the attention mask
+#     """
+#     b = process_args_kwargs_output(args, kwargs, output)
+#     batch_size, seq, d_model = b.shape
+#     if seq == 1:
+#         return b
+#     values = b.clone().data
+#     device = values.device
 
-    ablation_queries.reset_index(
-        drop=True, inplace=True
-    )  # Reset index to avoid problems with casting to tensor
-    head_indices = torch.tensor(
-        ablation_queries["head"], dtype=torch.long, device=device
-    )
-    pos_indices = torch.tensor(
-        ablation_queries["keys"], dtype=torch.long, device=device
-    )
-    # if num_layers != len(head_indices) or not torch.all(pos_indices == pos_indices[0]) :
-    #     raise ValueError("Flash attention ablation should be done on all heads at the same layer and at the same token position")
-    # if seq < pos_indices[0]:
-    #     # during generation the desired value vector has already been ablated
-    #     return b
-    pos_indices = pos_indices[0]
-    # Use advanced indexing to set the specified slices to zero
-    values[..., pos_indices, :] = 0
+#     ablation_queries.reset_index(
+#         drop=True, inplace=True
+#     )  # Reset index to avoid problems with casting to tensor
+#     head_indices = torch.tensor(
+#         ablation_queries["head"], dtype=torch.long, device=device
+#     )
+#     pos_indices = torch.tensor(
+#         ablation_queries["keys"], dtype=torch.long, device=device
+#     )
+#     # if num_layers != len(head_indices) or not torch.all(pos_indices == pos_indices[0]) :
+#     #     raise ValueError("Flash attention ablation should be done on all heads at the same layer and at the same token position")
+#     # if seq < pos_indices[0]:
+#     #     # during generation the desired value vector has already been ablated
+#     #     return b
+#     pos_indices = pos_indices[0]
+#     # Use advanced indexing to set the specified slices to zero
+#     values[..., pos_indices, :] = 0
 
-    b.copy_(values)
+#     b.copy_(values)
 
-    #!!dirty fix
+#     #!!dirty fix
 
-    return b
+#     return b
 
 
 def ablate_heads_hook(
@@ -377,7 +421,7 @@ def projected_value_vectors_head(
     output,
     layer,
     cache,
-    token_index,
+    token_indexes,
     num_attention_heads: int,
     num_key_value_heads: int,
     hidden_size: int,
@@ -451,19 +495,31 @@ def projected_value_vectors_head(
     )
 
     # slice for token index
-    projected_values = projected_values[:, :, token_index, :]
-
+    # Assume projected_values has shape [batch, num_heads, tokens, d_model]
     if avg:
-        projected_values = torch.mean(projected_values, dim=-1, keepdim=True)
+        # For each tuple, slice the tokens along dimension -2 and average over that token slice.
+        token_avgs = []
+        for token_tuple in token_indexes:
+            # Slice out the tokens for this tuple.
+            # Using ellipsis ensures we index the last two dimensions correctly.
+            token_slice = projected_values[..., list(token_tuple), :]
+            # Average over the token dimension (which is -2) while keeping that dimension.
+            token_avg = torch.mean(token_slice, dim=-2, keepdim=True)
+            token_avgs.append(token_avg)
+        # Concatenate the averaged slices along the token dimension (-2).
+        projected_values = torch.cat(token_avgs, dim=-2)
+    else:
+        # Flatten the list of token tuples into a single list of token indices.
+        flatten_indexes = [item for tup in token_indexes for item in tup]
+        projected_values = projected_values[..., flatten_indexes, :]
 
-    # post-process the values vectors
+    # Post-process the value vectors by selecting heads.
     if head == "all":
         for head_idx in range(num_attention_heads):
-            cache[f"projected_value_L{layer}H{head_idx}"] = projected_values[
-                :, head_idx
-            ]
+            cache[f"projected_value_L{layer}H{head_idx}"] = projected_values[:, head_idx]
     else:
         cache[f"projected_value_L{layer}H{head}"] = projected_values[:, int(head)]
+
 
 
 def avg_attention_pattern_head(
@@ -471,7 +527,7 @@ def avg_attention_pattern_head(
     args,
     kwargs,
     output,
-    token_index,
+    token_indexes,
     layer,
     attn_pattern_current_avg,
     batch_idx,
@@ -497,15 +553,18 @@ def avg_attention_pattern_head(
     attn_pattern = b.data.detach().clone()  # (batch, num_heads,seq_len, seq_len)
     # attn_pattern = attn_pattern.to(torch.float32)
     num_heads = attn_pattern.size(1)
+    
+    token_indexes = [item for sublist in token_indexes for item in sublist]
+    
     for head in range(num_heads):
         key = f"avg_pattern_L{layer}H{head}"
         if key not in attn_pattern_current_avg:
-            attn_pattern_current_avg[key] = attn_pattern[:, head, token_index][
-                :, :, token_index
+            attn_pattern_current_avg[key] = attn_pattern[:, head, token_indexes][
+                :, :, token_indexes
             ]
         else:
             attn_pattern_current_avg[key] += (
-                attn_pattern[:, head, token_index][:, :, token_index]
+                attn_pattern[:, head, token_indexes][:, :, token_indexes]
                 - attn_pattern_current_avg[key]
             ) / (batch_idx + 1)
         attn_pattern_current_avg[key] = attn_pattern_current_avg[key]
@@ -531,10 +590,10 @@ def avg_attention_pattern_head(
             norm_matrix = norm_matrix * attn_pattern[:, head]
 
             if value_key not in attn_pattern_current_avg:
-                attn_pattern_current_avg[value_key] = norm_matrix[..., token_index, :]
+                attn_pattern_current_avg[value_key] = norm_matrix[..., token_indexes, :]
             else:
                 attn_pattern_current_avg[value_key] += (
-                    norm_matrix[..., token_index, :]
+                    norm_matrix[..., token_indexes, :]
                     - attn_pattern_current_avg[value_key]
                 ) / (batch_idx + 1)
 
@@ -547,11 +606,12 @@ def attention_pattern_head(
     args,
     kwargs,
     output,
-    token_index,
+    token_indexes,
     layer,
     cache,
     head: Union[str, int] = "all",
     act_on_input=False,
+    avg: bool = False,
 ):
     """
     Hook function to extract the attention pattern of the heads. It will extract the attention pattern.
@@ -570,12 +630,34 @@ def attention_pattern_head(
     b = process_args_kwargs_output(args, kwargs, output)
 
     attn_pattern = b.data.detach().clone()  # (batch, num_heads,seq_len, seq_len)
-
+    
     if head == "all":
-        for head_idx in range(attn_pattern.size(1)):
-            key = f"pattern_L{layer}H{head_idx}"
-            cache[key] = attn_pattern[:, head_idx, token_index][:, :, token_index]
+        head_indices = range(attn_pattern.size(1))
     else:
-        cache[f"pattern_L{layer}H{head}"] = attn_pattern[:, head, token_index][
-            :, :, token_index
-        ]
+        head_indices = [head]
+    
+    if avg:
+        # For each token group (each tuple in token_indexes), compute a single average value.
+
+        for h in head_indices:
+            # For head h, pattern has shape [batch, seq_len, seq_len].
+            group_avgs = []
+            for group in token_indexes:
+                # Compute the average over both the row and column dimensions.
+                avg_val = torch.mean(attn_pattern[:, h,list(group), :][:,:, list(group)], dim=(-2, -1))  # shape: [batch]
+                group_avgs.append(avg_val.unsqueeze(1))  # shape: [batch, 1]
+            # Concatenate along the group dimension, yielding [batch, num_groups].
+            pattern_avg = torch.cat(group_avgs, dim=1)
+            # cache[f"pattern_L{layer}H{h}"] = pattern_avg
+            cache.add_with_info(
+                f"pattern_L{layer}H{h}",
+                pattern_avg,
+                "Shape: batch num_target_token_positions. For each group of tokens the average attention value was computed", 
+            )
+    else:
+        # Without averaging, flatten token_indexes into one list.
+        flatten_indexes = [item for tup in token_indexes for item in tup]
+        for h in head_indices:
+            # Slice both token dimensions using the flattened indexes.
+            pattern_slice = attn_pattern[:, h, flatten_indexes][:, :, flatten_indexes]
+            cache[f"pattern_L{layer}H{h}"] = pattern_slice

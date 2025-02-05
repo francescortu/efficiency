@@ -4,31 +4,32 @@ import torch
 from typing import List, Union
 import contextlib
 
-class ActivationItem():
-    def __init__(self, value, shape_info:str):
+
+class ActivationItem:
+    def __init__(self, value, shape_info: str):
         self.value = value
         self.shape = shape_info
-    
+
     def __repr__(self):
         return f"ActivationItem({self.value}, {self.shape})"
-    
+
     def __str__(self):
         return f"ActivationItem({self.value}, {self.shape})"
-    
 
-class ActivationCache():
+
+class ActivationCache:
     r"""
     Class to store and aggregate activation values from a model.
     It is a dictionary-like object with additional functionality to aggregate values.
     """
-    
+
     def __init__(self):
         self.cache = {}
         self.logger = Logger(
             logname="ActivationCache",
             level="INFO",
         )
-        
+
         self.valid_keys = (
             re.compile(r"resid_out_\d+"),
             re.compile(r"resid_in_\d+"),
@@ -42,75 +43,80 @@ class ActivationCache():
             re.compile(r"mapping_index"),
             re.compile(r"mlp_out_\d+"),
         )
-        
+
         self.aggregation_strategies = {}
-        self.register_aggregation("mapping_index", lambda values: values[0])  # First value
+        self.register_aggregation(
+            "mapping_index", lambda values: values[0]
+        )  # First value
         self.register_aggregation("pattern_", lambda values: values)  # Keep as list
         self.register_aggregation("input_ids", lambda values: values)  # Keep as list
-        self.register_aggregation("offset", lambda values: [item for sublist in values for item in sublist])  # Flatten lists
-        
+        self.register_aggregation(
+            "offset", lambda values: [item for sublist in values for item in sublist]
+        )  # Flatten lists
+
         self.defferred_cache = False
-        
+
     def __repr__(self) -> str:
         """
         Returns:
             str: A string representation of the ActivationCache object.
-            
+
         Examples:
             >>> cache
             ActivationCache(resid_out_0, resid_in_0, resid_mid_0, attn_in_0, attn_out_0, avg_attn_pattern_L1H1, pattern_L1H1, values_L1H1)
         """
         return f"ActivationCache(`{', '.join(self.cache.keys())}`)"
-    
+
     def __str__(self) -> str:
         """
         Returns:
             str: A string representation of the ActivationCache object.
-            
+
         Examples:
             >>> print(cache)
             ActivationCache(resid_out_0: torch.Tensor([1, 2, 3, 4]), resid_in_0: torch.Tensor([1, 2, 3, 4]))
         """
         return f"ActivationCache({', '.join([f'{key}: {value}' for key, value in self.cache.items()])})"
-        
-    def __setitem__(self, key:str, value):
+
+    def __setitem__(self, key: str, value):
         """
         Set a key-value pair in the cache.
-        
+
         Arguments:
             key (str): The key to store the value.
             value (Any): The value to store.
-            
+
         Examples:
             >>> cache["resid_out_0"] = torch.randn(1, 3, 16)
         """
         if not any([pattern.match(key) for pattern in self.valid_keys]):
-            self.logger.warning(f"Invalid key: {key}. Valid keys are: {self.valid_keys}. Could be a user-defined key.")
+            self.logger.warning(
+                f"Invalid key: {key}. Valid keys are: {self.valid_keys}. Could be a user-defined key."
+            )
         self.cache[key] = value
-        
-    def __getitem__(self, key:str):
+
+    def __getitem__(self, key: str):
         """
         Get a value from the cache.
-        
+
         Arguments:
             key (str): The key to retrieve the value.
-            
+
         Examples:
             >>> cache["resid_out_0"]
             torch.Tensor([1, 2, 3, 4])
         """
         return self.cache[key]
-    
-    
-    def __delitem__(self, key:str):
+
+    def __delitem__(self, key: str):
         """
         Remove a key-value pair from the cache.
-        
+
         Arguments:
             key (str): The key to remove from the cache.
         """
         del self.cache[key]
-        
+
     def __add__(self, other) -> "ActivationCache":
         """
         Overload the `+` operator to merge caches efficiently.
@@ -123,9 +129,12 @@ class ActivationCache():
             raise TypeError("Can only add ActivationCache or dict objects.")
 
         new_cache = ActivationCache()
-        new_cache.cache = {**self.cache, **(other.cache if isinstance(other, ActivationCache) else other)}
+        new_cache.cache = {
+            **self.cache,
+            **(other.cache if isinstance(other, ActivationCache) else other),
+        }
         return new_cache
-    
+
     def __contains__(self, key):
         """
         Check if a key is present in the cache.
@@ -135,28 +144,58 @@ class ActivationCache():
             bool: True if the key is present, False otherwise
         """
         return key in self.cache
-    
-    def get(self, key:str, default=None):
+
+    # Define __getstate__ to remove unpicklable objects
+    def __getstate__(self):
+        """
+        To support torch.save or pickle save
+        """
+        state = self.__dict__.copy()
+        # Remove or reset logger and aggregation_strategies (which contains lambdas)
+        if "logger" in state:
+            del state["logger"]
+        if "aggregation_strategies" in state:
+            del state["aggregation_strategies"]
+        return state
+
+    # Define __setstate__ to recreate the removed objects
+    def __setstate__(self, state):
+        """
+        To support torch.load or pickle load
+        """
+        self.__dict__.update(state)
+        # Reinitialize logger
+        self.logger = Logger(logname="ActivationCache", level="INFO")
+        # Reinitialize aggregation_strategies with the same definitions
+        self.aggregation_strategies = {}
+        self.register_aggregation("mapping_index", lambda values: values[0])
+        self.register_aggregation("pattern_", lambda values: values)
+        self.register_aggregation("input_ids", lambda values: values)
+        self.register_aggregation(
+            "offset", lambda values: [item for sublist in values for item in sublist]
+        )
+
+    def get(self, key: str, default=None):
         return self.cache.get(key, default)
-    
+
     def items(self):
         """
         Just like the dictionary items method, returns a list of key-value pairs.
         """
         return self.cache.items()
-    
+
     def keys(self):
         """
         Just like the dictionary keys method, returns a list of keys.
         """
         return self.cache.keys()
-    
+
     def values(self):
         """
         Just like the dictionary values method, returns a list of values.
         """
         return self.cache.values()
-    
+
     def update(self, other):
         """
         Updates the cache with values from an additional dictionary or ActivationCache object.
@@ -169,17 +208,15 @@ class ActivationCache():
             self.cache.update(other.cache)
         else:
             raise TypeError("Can only update with dict or ActivationCache objects.")
-        
 
-            
     def to(self, device: Union[str, torch.device]):
         """
         Moves the tensors in the cache to a specified device.
-        
+
         Args:
             device (Union[str, torch.device]): The device to move the tensors to.
         """
-        
+
         for key, value in self.cache.items():
             if hasattr(value, "to"):
                 self.cache[key] = value.to(device)
@@ -189,36 +226,34 @@ class ActivationCache():
         Moves the tensors in the cache to the CPU.
         """
         self.to("cpu")
-        
+
     def cuda(self):
         """
         Moves the tensors in the cache to the GPU.
         """
         self.to("cuda")
 
-        
     def register_aggregation(self, key_pattern, function):
         """
         Register a custom aggregation strategy for keys matching a pattern. In this way, you can define how to aggregate values for specific keys when merging caches.
-        
+
         Arguments:
             key_pattern (str): The key or prefix to match.
             function (callable): The function to apply for aggregation.
-            
+
         Examples:
             >>> cache.register_aggregation("values_", lambda values: torch.stack(values, dim=0))
         """
         self.aggregation_strategies[key_pattern] = function
-    
-    
+
     def default_aggregation(self, values):
         """
         Default aggregation strategy for keys without a custom strategy.
         Handles tensors, lists, and scalars.
-        
+
         Arguments:
             values (List): List of values to aggregate.
-            
+
         Returns:
             Union[torch.Tensor, List, Any]: The aggregated value.
         """
@@ -231,7 +266,7 @@ class ActivationCache():
             return [item for sublist in values for item in sublist]
         else:
             return values[0]  # Fallback to the first value
-        
+
     @contextlib.contextmanager
     def deferred_mode(self):
         """
@@ -240,7 +275,7 @@ class ActivationCache():
         This is most similar to the old way of using the `cat` method. It could (or could not) be more efficient.
         The main difference to direct calls to `cat` is that the cache is not updated until the end of the context, in this way the torch.cat, torch.stack and the other strategies are called only once.
         It will require more memory, but it could be more efficient.
-        
+
         Examples:
             >>> with cache.deferred_mode():
             >>>     cache.cat(external_cache1)
@@ -255,15 +290,15 @@ class ActivationCache():
         finally:
             # Clear the deferred cache
             self.deferred_cache = None
-        
+
     def cat(self, external_cache):
         """
         Merge the current cache with an external cache using aggregation strategies.
-        
+
         Arguments:
             external_cache (ActivationCache): The external cache to merge with.
-        
-        
+
+
         Examples:
             >>> a, b = ActivationCache(), ActivationCache()
             >>> a["values_0"] = torch.tensor([1, 2])
@@ -304,6 +339,7 @@ class ActivationCache():
                 self.cache[key] = self.default_aggregation(
                     [self.cache[key], external_cache[key]]
                 )
+
     def add_with_info(self, key: str, value, info: str):
         """
         Stores the 'value' under 'key' but wraps it in an object that provides
@@ -313,7 +349,7 @@ class ActivationCache():
             key (str): The cache key.
             value (Any): The object to store, e.g. a tensor or list.
             info (str): The associated info string.
-            
+
         Examples:
             >>> cache.add_with_info("resid_out_0", torch.randn(1, 3, 16), "shape: batch x seq x hidden")
             >>> cache["resid_out_0"].info()
@@ -322,13 +358,14 @@ class ActivationCache():
             torch.Size([1, 3, 16])
             >>> cache["resid_out_0"]
             tensor([[[1, 2, 3, 4]]])
-        
+
         """
 
         class ValueWithInfo:
             """
             Thin wrapper around the original value to store extra info.
             """
+
             __slots__ = ("_value", "_info")  # optional for memory efficiency
 
             def __init__(self, value, info):
@@ -340,7 +377,7 @@ class ActivationCache():
                 Return the custom info string.
                 """
                 return self._info
-            
+
             def value(self):
                 """
                 Return the value.
@@ -358,20 +395,14 @@ class ActivationCache():
 
         wrapped = ValueWithInfo(value, info)
         self[key] = wrapped
-    
+
     # def expand_attention_heads(self, dim):
     #     """
     #     Expand the head dimension of all tensors in the cache.
-        
+
     #     Arguments:
     #         dim (int): The dimension to expand.
     #     """
     #     for key, value in self.cache.items():
     #         if isinstance(value, torch.Tensor):
     #             self.cache[key] = value.unsqueeze(dim)
-                
-                
-                
-                
-                
-        

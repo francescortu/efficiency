@@ -7,7 +7,7 @@ from functools import partial
 from easyroutine.interpretability.hooks import (
     ablate_attn_mat_hook,
     ablate_heads_hook,
-    ablate_tokens_hook_flash_attn,
+    # ablate_tokens_hook_flash_attn,
 )
 from easyroutine.interpretability.utils import preprocess_ablation_queries
 
@@ -92,12 +92,12 @@ class AblationManager:
                 ablation_func=self._ablation_type_block_img_to_txt_wout_special_pixtral_func,
                 hook_func=ablate_attn_mat_hook,
             ),
-            AblationType.FLASH_ATTN: AblationConfig(
-                type=AblationType.FLASH_ATTN,
-                hook_pos=self.model_config.head_value_hook_name,
-                ablation_func=self._ablation_type_flash_attn_func,
-                hook_func=ablate_tokens_hook_flash_attn,
-            ),
+            # AblationType.FLASH_ATTN: AblationConfig(
+            #     type=AblationType.FLASH_ATTN,
+            #     hook_pos=self.model_config.head_value_hook_name,
+            #     ablation_func=self._ablation_type_flash_attn_func,
+            #     hook_func=ablate_tokens_hook_flash_attn,
+            # ),
             # Add more configurations here
         }
 

@@ -257,7 +257,7 @@ class TokenIndex:
 
         for token in tokens:
             if token_dict[token] is not None:
-                tokens_positions.extend(token_dict[token])  # type: ignore
+                tokens_positions.append(tuple(token_dict[token]))  # type: ignore
 
         return tokens_positions
 

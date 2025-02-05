@@ -9,6 +9,7 @@ from easyroutine.interpretability.hooked_model import (
 from easyroutine.interpretability.activation_cache import ActivationCache
 from PIL import Image
 import numpy as np
+from typing import List
 
 
 DEVICE = "auto"
@@ -19,7 +20,7 @@ class BaseHookedModelTestCase(unittest.TestCase):
     CONFIG = None
     MODEL: HookedModel
     INPUTS: dict
-    TARGET_TOKEN_POSITION = ["inputs-partition-0"]
+    TARGET_TOKEN_POSITION: List[str] = ["inputs-partition-0"]
     input_size: int
     # def setUp(self):
     #     """

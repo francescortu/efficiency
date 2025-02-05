@@ -867,7 +867,7 @@ class HookedModel:
     def forward(
         self,
         inputs,
-        target_token_positions: List[Union[str, int, Tuple[int, int]]] = ["last"],
+        target_token_positions: Union[List[Union[str, int, Tuple[int, int]]], List[str], List[int], List[Tuple[int,int]]] = ["last"],
         pivot_positions: Optional[List[int]] = None,
         extraction_config: ExtractionConfig = ExtractionConfig(),
         ablation_queries: Optional[List[dict]] = None,
@@ -1134,7 +1134,7 @@ class HookedModel:
     def extract_cache(
         self,
         dataloader,
-        target_token_positions: List[Union[str, int, Tuple[int, int]]],
+        target_token_positions: Union[List[Union[str, int, Tuple[int, int]]], List[str], List[int], List[Tuple[int,int]]],
         batch_saver: Callable = lambda x: None,
         move_to_cpu_after_forward: bool = True,
         # save_other_batch_elements: bool = False,

@@ -207,7 +207,7 @@ class TokenIndex:
 
     def get_token_index(
         self,
-        tokens: List[Union[str, int, Tuple[int, int]]],
+        tokens: Union[List[Union[str, int, Tuple[int, int]]], List[str], List[int], List[Tuple[int,int]]],
         string_tokens: List[str],
         return_type: Literal["list", "dict", "all"] = "list",
     ) -> Union[List[int], Dict, Tuple[List[int], Dict]]:

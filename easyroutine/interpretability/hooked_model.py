@@ -1,21 +1,13 @@
 import torch
 from transformers import GenerationConfig
-from typing import (
-    Union,
-    Literal,
-    Optional,
-    List,
-    Dict,
-    Callable,
-    Any,
-)
+from typing import Union, Literal, Optional, List, Dict, Callable, Any, Tuple
 
 from easyroutine.interpretability.models import (
     ModelFactory,
     TokenizerFactory,
     InputHandler,
 )
-from easyroutine.interpretability.token_index import TokenIndex
+from easyroutine.interpretability.token_index import TokenIndex, TokenType
 from easyroutine.interpretability.activation_cache import ActivationCache
 from easyroutine.interpretability.utils import get_attribute_by_name
 from easyroutine.interpretability.module_wrappers.manager import ModuleWrapperManager
@@ -260,12 +252,26 @@ class HookedModel:
             self.assert_module_exists(getattr(self.model_config, hook_attribute))
 
     def set_custom_modules(self):
+        """
+        Apply the wrap of the custom modules. for now just the attention module
+        """
         self.logger.info("Setting custom modules.", std_out=True)
         self.module_wrapper_manager.substitute_attention_module(self.hf_model)
 
     def restore_original_modules(self):
+        """
+        Restore the original modules of the model unloading the custom modules.
+        """
         self.logger.info("Restoring original modules.", std_out=True)
         self.module_wrapper_manager.restore_original_attention_module(self.hf_model)
+
+    def is_multimodal(self) -> bool:
+        """
+        Get if the model is multimodal or not
+        """
+        if self.processor is not None:
+            return True
+        return False
 
     def use_full_model(self):
         if self.processor is not None:
@@ -861,7 +867,7 @@ class HookedModel:
     def forward(
         self,
         inputs,
-        target_token_positions: List[str] = ["last"],
+        target_token_positions: List[Union[str, int, Tuple[int, int]]] = ["last"],
         pivot_positions: Optional[List[int]] = None,
         extraction_config: ExtractionConfig = ExtractionConfig(),
         ablation_queries: Optional[List[dict]] = None,
@@ -876,7 +882,7 @@ class HookedModel:
 
         Args:
             inputs (dict): dictionary with the inputs of the model (input_ids, attention_mask, pixel_values ...)
-            target_token_positions (list[str]): list of tokens to extract the activations from (["last", "end-image", "start-image", "first"])
+            target_token_positions (Union[Union[str, int, Tuple[int, int]], List[Union[str, int, Tuple[int, int]]]]): tokens to extract the activations from (["last", "end-image", "start-image", "first", -1, (2,10)]). See TokenIndex.get_token_index for more details
             pivot_positions (Optional[list[int]]): list of split positions of the tokens
             extraction_config (ExtractionConfig): configuration of the extraction of the activations of the model
             ablation_queries (Optional[pd.DataFrame | None]): dataframe with the ablation queries to perform during forward pass
@@ -899,6 +905,7 @@ class HookedModel:
             raise ValueError(
                 "target_token_positions must be passed if we want to extract the activations of the model"
             )
+
         cache = ActivationCache()
         string_tokens = self.to_string_tokens(
             self.input_handler.get_input_ids(inputs).squeeze()
@@ -945,6 +952,8 @@ class HookedModel:
 
         mapping_index = {}
         current_index = 0
+
+
         for token in target_token_positions:
             mapping_index[token] = []
             if isinstance(token_dict, int):
@@ -1125,7 +1134,7 @@ class HookedModel:
     def extract_cache(
         self,
         dataloader,
-        target_token_positions: List[str],
+        target_token_positions: List[Union[str, int, Tuple[int, int]]],
         batch_saver: Callable = lambda x: None,
         move_to_cpu_after_forward: bool = True,
         # save_other_batch_elements: bool = False,
@@ -1134,12 +1143,12 @@ class HookedModel:
         r"""
         Method to extract the activations of the model from a specific dataset. Compute a forward pass for each batch of the dataloader and save the activations in the cache.
 
-        Args:
-            dataloader (iterable): dataloader with the dataset. Each element of the dataloader must be a dictionary that contains the inputs that the model expects (input_ids, attention_mask, pixel_values ...)
-            extracted_token_position (list[str]): list of tokens to extract the activations from (["last", "end-image", "start-image", "first"])
-            batch_saver (Callable): function to save in the cache the additional element from each elemtn of the batch (For example, the labels of the dataset)
-            move_to_cpu_after_forward (bool): if True, move the activations to the cpu right after the any forward pass of the model
-            **kwargs: additional arguments to control hooks generation, basically accept any argument handled by the `.forward` method (i.e. ablation_queries, patching_queries, extract_resid_in)
+        Arguments:
+            - dataloader (iterable): dataloader with the dataset. Each element of the dataloader must be a dictionary that contains the inputs that the model expects (input_ids, attention_mask, pixel_values ...)
+            - extracted_token_position (Union[Union[str, int, Tuple[int, int]], List[Union[str, int, Tuple[int, int]]]]): list of tokens to extract the activations from (["last", "end-image", "start-image", "first", -1, (2,10)]). See TokenIndex.get_token_index for more details
+            - batch_saver (Callable): function to save in the cache the additional element from each elemtn of the batch (For example, the labels of the dataset)
+            - move_to_cpu_after_forward (bool): if True, move the activations to the cpu right after the any forward pass of the model
+            - **kwargs: additional arguments to control hooks generation, basically accept any argument handled by the `.forward` method (i.e. ablation_queries, patching_queries, extract_resid_in)
 
         Returns:
             final_cache: dictionary with the activations of the model. The keys are the names of the activations and the values are the activations themselve
@@ -1159,7 +1168,6 @@ class HookedModel:
         attn_pattern = (
             ActivationCache()
         )  # Initialize the dictionary to hold running averages
-
         example_dict = {}
         n_batches = 0  # Initialize batch counter
 
@@ -1211,7 +1219,7 @@ class HookedModel:
     @torch.no_grad()
     def compute_patching(
         self,
-        target_token_positions: List[str],
+        target_token_positions: List[Union[str, int, Tuple[int, int]]],
         # counterfactual_dataset,
         base_dataloader,
         target_dataloader,
@@ -1239,14 +1247,14 @@ class HookedModel:
         3. Forward pass on the target dataset to patch (cat) into (dog)
         and extract the patched logits.
 
-        Args:
-            target_token_positions (list[str]): List of tokens to extract the activations from.
-            base_dataloader (torch.utils.data.DataLoader): Dataloader with the base dataset. (dataset where we sample the activations from)
-            target_dataloader (torch.utils.data.DataLoader): Dataloader with the target dataset. (dataset where we patch the activations)
-            patching_query (list[dict]): List of dictionaries with the patching queries. Each dictionary must have the keys "patching_elem", "layers_to_patch" and "activation_type". The "patching_elem" is the token to patch, the "layers_to_patch" is the list of layers to patch and the "activation_type" is the type of the activation to patch. The activation type must be one of the following: "resid_in_{}", "resid_out_{}", "resid_mid_{}", "attn_in_{}", "attn_out_{}", "values_{}". The "{}" will be replaced with the layer index.
-            base_dictonary_idxs (list[list[int]]): List of list of integers with the indexes of the tokens in the dictonary that we are interested in. It's useful to extract the logit difference between the clean logits and the patched logits.
-            target_dictonary_idxs (list[list[int]]): List of list of integers with the indexes of the tokens in the dictonary that we are interested in. It's useful to extract the logit difference between the clean logits and the patched logits.
-            return_logit_diff (bool): If True, it will return the logit difference between the clean logits and the patched logits.
+        Arguments:
+            - target_token_positions (Union[Union[str, int, Tuple[int, int]], List[Union[str, int, Tuple[int, int]]]]): List of tokens to extract the activations from. See TokenIndex.get_token_index for more details
+            - base_dataloader (torch.utils.data.DataLoader): Dataloader with the base dataset. (dataset where we sample the activations from)
+            - target_dataloader (torch.utils.data.DataLoader): Dataloader with the target dataset. (dataset where we patch the activations)
+            - patching_query (list[dict]): List of dictionaries with the patching queries. Each dictionary must have the keys "patching_elem", "layers_to_patch" and "activation_type". The "patching_elem" is the token to patch, the "layers_to_patch" is the list of layers to patch and the "activation_type" is the type of the activation to patch. The activation type must be one of the following: "resid_in_{}", "resid_out_{}", "resid_mid_{}", "attn_in_{}", "attn_out_{}", "values_{}". The "{}" will be replaced with the layer index.
+            - base_dictonary_idxs (list[list[int]]): List of list of integers with the indexes of the tokens in the dictonary that we are interested in. It's useful to extract the logit difference between the clean logits and the patched logits.
+            - target_dictonary_idxs (list[list[int]]): List of list of integers with the indexes of the tokens in the dictonary that we are interested in. It's useful to extract the logit difference between the clean logits and the patched logits.
+            - return_logit_diff (bool): If True, it will return the logit difference between the clean logits and the patched logits.
 
 
         Returns:
@@ -1286,6 +1294,10 @@ class HookedModel:
             f"Patching elements: {[q['patching_elem'] for q in patching_query]} at {[query['activation_type'][:-3] for query in patching_query]}",
             std_out=True,
         )
+
+        # if target_token_positions is not a list, convert it to a list
+        if not isinstance(target_token_positions, list):
+            target_token_positions = [target_token_positions]
 
         # get a random number in the range of the dataset to save a random batch
         all_cache = ActivationCache()

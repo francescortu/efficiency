@@ -5,16 +5,37 @@ from typing import List, Union
 import contextlib
 
 
-class ActivationItem:
-    def __init__(self, value, shape_info: str):
-        self.value = value
-        self.shape = shape_info
+class ValueWithInfo:
+    """
+    Thin wrapper around the original value to store extra info.
+    """
+
+    __slots__ = ("_value", "_info")  # optional for memory efficiency
+
+    def __init__(self, value, info):
+        self._value = value
+        self._info = info
+
+    def info(self):
+        """
+        Return the custom info string.
+        """
+        return self._info
+
+    def value(self):
+        """
+        Return the value.
+        """
+        return self._value
+
+    def __getattr__(self, name):
+        """
+        Forward attribute lookups to the wrapped value.
+        """
+        return getattr(self._value, name)
 
     def __repr__(self):
-        return f"ActivationItem({self.value}, {self.shape})"
-
-    def __str__(self):
-        return f"ActivationItem({self.value}, {self.shape})"
+        return f"ValueWithInfo(value={self._value!r}, info={self._info!r})"
 
 
 class ActivationCache:
@@ -48,7 +69,7 @@ class ActivationCache:
         self.register_aggregation(
             "mapping_index", lambda values: values[0]
         )  # First value
-        self.register_aggregation("pattern_", lambda values: values)  # Keep as list
+        # self.register_aggregation("pattern_", lambda values: values)  # Keep as list
         self.register_aggregation("input_ids", lambda values: values)  # Keep as list
         self.register_aggregation(
             "offset", lambda values: [item for sublist in values for item in sublist]
@@ -169,11 +190,12 @@ class ActivationCache:
         # Reinitialize aggregation_strategies with the same definitions
         self.aggregation_strategies = {}
         self.register_aggregation("mapping_index", lambda values: values[0])
-        self.register_aggregation("pattern_", lambda values: values)
+        # self.register_aggregation("pattern_", lambda values: values)
         self.register_aggregation("input_ids", lambda values: values)
         self.register_aggregation(
             "offset", lambda values: [item for sublist in values for item in sublist]
         )
+
 
     def get(self, key: str, default=None):
         return self.cache.get(key, default)
@@ -246,6 +268,19 @@ class ActivationCache:
         """
         self.aggregation_strategies[key_pattern] = function
 
+    def remove_aggregation(self, key_pattern):
+        """
+        Remove a custom aggregation strategy for keys matching a pattern.
+
+        Arguments:
+            key_pattern (str): The key or prefix to match.
+
+        Examples:
+            >>> cache.remove_aggregation("values_")
+        """
+        if key_pattern in self.aggregation_strategies:
+            del self.aggregation_strategies[key_pattern]
+
     def default_aggregation(self, values):
         """
         Default aggregation strategy for keys without a custom strategy.
@@ -259,13 +294,25 @@ class ActivationCache:
         """
         if isinstance(values[0], torch.Tensor):
             try:
+                # First attempt: concatenate tensors
                 return torch.cat(values, dim=0)
-            except RuntimeError:
-                return torch.stack(values, dim=0)
+            except RuntimeError as e:
+                # If concatenation fails, try stacking them
+                try:
+                    return torch.stack(values, dim=0)
+                except RuntimeError as e:
+                    # If stacking fails, log the error and return the values as-is
+                    self.logger.error(f"Tensor aggregation failed: {e}. Returning values as is.")
+                    return values  # Return the values as-is
         elif isinstance(values[0], list):
             return [item for sublist in values for item in sublist]
+        elif isinstance(values[0], ValueWithInfo):
+            aggregated_values = self.default_aggregation([value.value() for value in values])
+            info = values[0].info()
+            return ValueWithInfo(aggregated_values, info)
         else:
             return values[0]  # Fallback to the first value
+
 
     @contextlib.contextmanager
     def deferred_mode(self):
@@ -361,37 +408,7 @@ class ActivationCache:
 
         """
 
-        class ValueWithInfo:
-            """
-            Thin wrapper around the original value to store extra info.
-            """
 
-            __slots__ = ("_value", "_info")  # optional for memory efficiency
-
-            def __init__(self, value, info):
-                self._value = value
-                self._info = info
-
-            def info(self):
-                """
-                Return the custom info string.
-                """
-                return self._info
-
-            def value(self):
-                """
-                Return the value.
-                """
-                return self._value
-
-            def __getattr__(self, name):
-                """
-                Forward attribute lookups to the wrapped value.
-                """
-                return getattr(self._value, name)
-
-            def __repr__(self):
-                return f"ValueWithInfo(value={self._value!r}, info={self._info!r})"
 
         wrapped = ValueWithInfo(value, info)
         self[key] = wrapped

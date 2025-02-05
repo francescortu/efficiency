@@ -104,17 +104,17 @@ class BaseHookedModelTestCase(unittest.TestCase):
         Test the extract_cache method of HookedModel.
         """
 
-        class CustomDataset(Dataset):
-            def __init__(self, data):
-                self.data = data
+        # class CustomDataset(Dataset):
+        #     def __init__(self, data):
+        #         self.data = data
 
-            def __len__(self):
-                return len(self.data)
+        #     def __len__(self):
+        #         return len(self.data)
 
-            def __getitem__(self, idx):
-                return self.data[idx]
+        #     def __getitem__(self, idx):
+        #         return self.data[idx]
 
-        dataloader = [self.INPUTS]
+        dataloader = [self.INPUTS, self.INPUTS]
         # dataset = CustomDataset(data)
         # dataloader = DataLoader(dataset)
 
@@ -135,6 +135,29 @@ class BaseHookedModelTestCase(unittest.TestCase):
         self.assertIn("mapping_index", final_cache)
         self.assertIn("example_dict", final_cache)
         self.assertTrue(torch.is_tensor(final_cache["logits"]))
+        
+    def test_pattern_with_extract_cache(self):
+        """
+        Pattern is dangerous, needs its own test
+        """
+        dataloader = [self.INPUTS, self.INPUTS]
+        # dataset = CustomDataset(data)
+        # dataloader = DataLoader(dataset)
+
+        target_token_positions = ["inputs-partition-0", "last"]
+
+        def batch_saver(batch):
+            return {"batch_info": batch}
+
+        final_cache = self.MODEL.extract_cache(
+            dataloader,
+            target_token_positions=target_token_positions,
+            batch_saver=batch_saver,
+            extraction_config=ExtractionConfig(
+                extract_attn_pattern=True, avg=True
+                ),
+        )
+        return
 
     def test_hook_resid_out(self):
         cache = self.MODEL.forward(
@@ -160,7 +183,38 @@ class BaseHookedModelTestCase(unittest.TestCase):
         self.assertEqual(
             cache["resid_out_0"].shape, (1, 2, self.MODEL.model_config.hidden_size)
         )
-
+        
+    def test_slice_tokens(self):
+        """
+        Test the slice_tokens support in the forward method
+        """
+        cache = self.MODEL.forward(
+            self.INPUTS,
+            [(0, 4)],
+            pivot_positions=[4],
+            extraction_config=ExtractionConfig(extract_resid_out=True),
+        )
+        
+        self.assertIn("resid_out_0", cache)
+        self.assertEqual(
+            cache["resid_out_0"].shape, (1, 4, self.MODEL.model_config.hidden_size)
+        )
+        
+    def test_hook_resid_out_multimodal(self):
+        if not self.MODEL.is_multimodal():
+            return
+        cache = self.MODEL.forward(
+            self.INPUTS,
+            ["all-image"],
+            pivot_positions=[4],
+            extraction_config=ExtractionConfig(extract_resid_out=True),
+        )
+        # assert that cache resid_out_0 has shape (1,something,hid_size)
+        self.assertIn("resid_out_0", cache)
+        self.assertEqual(
+            cache["resid_out_0"][:,:4,:].shape, (1, 4, self.MODEL.model_config.hidden_size)
+        )
+        
     def test_hook_resid_in(self):
         cache = self.MODEL.forward(
             self.INPUTS,
@@ -479,6 +533,7 @@ class BaseHookedModelTestCase(unittest.TestCase):
     def test_patching(self):
         # TODO: Implement this test
         pass
+    
 
 
 ################### BASE TEST CASES ######################
@@ -607,8 +662,8 @@ class TestHookedLlavaModel(BaseHookedModelTestCase):
         cls.input_size = cls.INPUTS["input_ids"].shape[1]
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
+# if __name__ == "__main__":
+#     unittest.main(verbosity=2)
 
 
 if __name__ == "__main__":

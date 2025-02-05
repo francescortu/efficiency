@@ -7,7 +7,7 @@ models:
   Emu3-Gen: ["<|image start|>", null, "<|image end|>"]
   Emu3-Stage1: ["<|image start|>", null, "<|image end|>"]
   hf-internal-testing/tiny-random-LlamaForCausalLM: [null, null, null]
-  llava-hf/llava-v1.6-mistral-7b-hf: ["[IMG]", "[BREAK]", "[IMG_END]"]
+  llava-hf/llava-v1.6-mistral-7b-hf: ["<image>", null, "<image>"]
   ChoereForAI/aya-101: [null, null, null]
 
 token_position:

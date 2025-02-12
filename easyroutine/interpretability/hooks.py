@@ -2,7 +2,7 @@
 import torch
 from copy import deepcopy
 import pandas as pd
-from typing import List, Callable, Union
+from typing import List, Callable, Union, Literal
 from einops import rearrange, einsum
 from easyroutine.interpretability.utils import repeat_kv, get_module_by_path
 from easyroutine.interpretability.activation_cache import ActivationCache
@@ -10,6 +10,7 @@ from functools import partial
 import re
 import torch.nn as nn
 import einops
+import itertools
 
 
 def process_args_kwargs_output(args, kwargs, output):
@@ -611,19 +612,56 @@ def attention_pattern_head(
     cache,
     head: Union[str, int] = "all",
     act_on_input=False,
-    avg: bool = False,
+    attn_pattern_avg: Literal["mean", "sum", "baseline_ratio", "none"] = "none",
+    attn_pattern_row_partition = None
 ):
     """
     Hook function to extract the attention pattern of the heads. It will extract the attention pattern.
     As the other hooks, it will save the activations in the cache (a global variable out the scope of the function)
 
-    Args:
-        - b: the input of the hook function. It's the output of the attention pattern of the heads
-        - s: the state of the hook function. It's the state of the model
-        - layer: the layer of the model
-        - head: the head of the model
-        - expand_head: bool to expand the head dimension when extracting the values vectors and the attention pattern. If true, in the cache we will have a key for each head, like "pattern_L0H0", "pattern_L0H1", ...
-                        while if False, we will have only one key for each layer, like "pattern_L0" and the dimension of the head will be taken into account in the tensor.
+    Arguments:
+        - args: the input args of the hook function
+        - kwargs: the input kwargs of the hook function
+        - output: the output of the hook function
+        - token_indexes (List[Tuple]) : the indexes of the tokens to extract the attention pattern
+        - layer (int): the layer of the model
+        - cache (ActivationCache): the cache where to save the activations
+        - head (Union[str, int]): the head of the model. If "all" is passed, it will extract all the heads of the layer
+        - attn_pattern_avg (Literal["mean", "sum", "baseline_ratio", "none"]): the method to average the attention pattern
+        - attn_pattern_row_partition (List[int]): the indexes of the tokens to partition the attention pattern
+        
+    Avg strategies:
+        If the attn_pattern_avg is not "none", the attention pattern is divided in blocks and the average value of each block is computed, using the method specified in attn_pattern_avg.
+        The idea is to partition the attention pattern into groups of tokens, and then compute a single average value for each group. The pattern is divided into len(attn_pattern_row_partition) x len(token_indexes) blocks, where each block is a subset of the attention pattern. Each block B_ij is defined to have the indeces of the rows in attn_pattern_row_partition[i] and the columns in token_indexes[j]. If attn_pattern_row_partition is None, then the rows are the same as token_indexes.
+        
+        0| a_00 0    0    0    0    0    0              token_indexes = [(1,3), (4)]
+        1| a_10 a_11 0    0    0    0    0              attn_pattern_row_partition = [(0,1)]
+        2| a_20 a_21 a_22 0    0    0    0
+        3| a_30 a_31 a_32 a_33 0    0    0
+        4| a_40 a_41 a_42 a_43 a_44 0    0
+        5| a_50 a_51 a_52 a_53 a_54 a_55 0
+        6| a_60 a_61 a_62 a_63 a_64 a_65 a_66
+           ------------------------------
+            0    1     2   3     4    5    6
+        
+        - Block B_00:
+            - Rows: 0,1
+            - Columns: 1,2,3
+            - Block: [a_01, a_02, a_03, a_11, a_12, a_13]
+        - Block B_01:
+            - Rows: 0,1
+            - Columns: 4
+            - Block: [a_04, a_14]
+            
+            
+        If attn_pattern_avg is "mean", the average value for each block is computed as the mean of the block, so the output will be: batch n_row_blocks n_col_blocks
+        So in this case, the output will be: batch 1 2 where the first value is the average of the first block and the second value is the average of the second block.
+        
+        The method to compute a single value for each block is specified by the attn_pattern_avg parameter, and can be one of the following:
+        - "mean": Compute the mean of the block.
+        - "sum": Compute the sum of the block.
+        - "baseline_ratio": Compute the ratio of the observed average attention to the expected average attention. The expected average attention is computed by assuming that attention is uniform across the block. So, for each row in attn_pattern_row_partition, we compute the fraction of allowed keys that belong to token_indexes. The expected average attention is the sum of these fractions divided by the number of rows. The final ratio is the observed average attention divided by the expected average attention.
+        
 
     """
     # first get the attention pattern
@@ -631,29 +669,79 @@ def attention_pattern_head(
 
     attn_pattern = b.data.detach().clone()  # (batch, num_heads,seq_len, seq_len)
     
+    
     if head == "all":
         head_indices = range(attn_pattern.size(1))
     else:
         head_indices = [head]
+        
+    if attn_pattern_row_partition is not None:
+        token_indexes_group1 = attn_pattern_row_partition
+    else:
+        token_indexes_group1 = token_indexes
+        
     
-    if avg:
-        # For each token group (each tuple in token_indexes), compute a single average value.
-
+    if attn_pattern_avg!="none":
+    # For each token group (each tuple in token_indexes), compute a single average value.
+    
         for h in head_indices:
             # For head h, pattern has shape [batch, seq_len, seq_len].
             group_avgs = []
-            for group in token_indexes:
-                # Compute the average over both the row and column dimensions.
-                avg_val = torch.mean(attn_pattern[:, h,list(group), :][:,:, list(group)], dim=(-2, -1))  # shape: [batch]
-                group_avgs.append(avg_val.unsqueeze(1))  # shape: [batch, 1]
-            # Concatenate along the group dimension, yielding [batch, num_groups].
-            pattern_avg = torch.cat(group_avgs, dim=1)
-            # cache[f"pattern_L{layer}H{h}"] = pattern_avg
-            cache.add_with_info(
-                f"pattern_L{layer}H{h}",
-                pattern_avg,
-                "Shape: batch num_target_token_positions. For each group of tokens the average attention value was computed", 
-            )
+            
+            # Generate all combinations of groups
+            for group1 in token_indexes_group1:
+                for group2 in token_indexes:
+                    # Extract the attention block for this combination.
+                    attn_block = attn_pattern[:, h, list(group1), :][:, :, list(group2)]
+                    
+                    # Depending on the selected averaging method, compute a metric.
+                    if attn_pattern_avg == "mean":
+                        # Simple mean over the block.
+                        avg_val = torch.mean(attn_block, dim=(-2, -1))  # shape: [batch]
+                    
+                    elif attn_pattern_avg == "sum":
+                        # Simple sum over the block.
+                        avg_val = torch.sum(attn_block, dim=(-2, -1))
+                    
+                    elif attn_pattern_avg == "baseline_ratio":
+                        # ---- Step 1. Compute the observed average attention in the block.
+                        observed_val = torch.mean(attn_block, dim=(-2, -1))  # shape: [batch]
+                        
+                        # ---- Step 2. Compute the baseline expectation.
+                        # For each row (i.e. token index) in group1, we calculate the fraction of allowed keys
+                        # that belong to group2. Because the attention is lower-triangular,
+                        # a row with index 'i' can only attend to tokens with indices <= i.
+                        # Thus, for each row 'i' in group1, the expected fraction (if uniform) is:
+                        #      (# of tokens in group2 with index <= i) / (i+1)
+                        baseline_list = []
+                        for i in group1:
+                            # Count the number of tokens in group2 that are allowed for row i.
+                            allowed_count = sum(1 for j in group2 if j <= i)
+                            # Total keys available for row i (assuming indices start at 0).
+                            total_allowed = i + 1  
+                            # Avoid division by zero (should not happen if i>=0).
+                            baseline_ratio = allowed_count / total_allowed if total_allowed > 0 else 0.0
+                            baseline_list.append(baseline_ratio)
+                        
+                        # Average the per-row baseline over all rows in group1.
+                        # This represents the expected average attention to group2 if it were uniformly distributed.
+                        baseline_val = sum(baseline_list) / len(baseline_list)
+                        
+                        # ---- Step 3. Compute the final ratio.
+                        # We compare the observed average attention to the baseline expectation.
+                        # A value > 1 means that, on average, attention in this block is higher than expected.
+                        # Expand baseline_val to match the batch shape for element-wise division.
+                        baseline_tensor = torch.tensor(baseline_val, device=observed_val.device).expand_as(observed_val)
+                        avg_val = observed_val / baseline_tensor
+                    
+                    # Append the computed metric for this block (keeping the batch dimension).
+                    group_avgs.append(avg_val.unsqueeze(1))  # shape: [batch, 1]
+            pattern_avg = einops.rearrange(torch.cat(group_avgs, dim=1), "batch (G1 G2) -> batch G1 G2", G1=len(token_indexes_group1), G2=len(token_indexes))
+            
+
+            # Add the pattern to the cache
+            cache[f"pattern_L{layer}H{h}"] = pattern_avg
+
     else:
         # Without averaging, flatten token_indexes into one list.
         flatten_indexes = [item for tup in token_indexes for item in tup]

@@ -141,24 +141,8 @@ class BaseHookedModelTestCase(unittest.TestCase):
         """
         Pattern is dangerous, needs its own test
         """
-        dataloader = [self.INPUTS, self.INPUTS]
-        # dataset = CustomDataset(data)
-        # dataloader = DataLoader(dataset)
-
-        target_token_positions = ["inputs-partition-0", "last"]
-
-        def batch_saver(batch):
-            return {"batch_info": batch}
-
-        final_cache = self.MODEL.extract_cache(
-            dataloader,
-            target_token_positions=target_token_positions,
-            batch_saver=batch_saver,
-            extraction_config=ExtractionConfig(
-                extract_attn_pattern=True, avg=True
-                ),
-        )
-        return
+        # raise test failed
+        self.assertTrue(False)
 
     def test_hook_resid_out(self):
         cache = self.MODEL.forward(
@@ -389,26 +373,111 @@ class BaseHookedModelTestCase(unittest.TestCase):
         )
 
     def test_hook_extract_avg_over_examples_attn_pattern(self):
+        """
+        Original minimal test. We'll keep it here as-is for reference.
+        """
         external_cache = ActivationCache()
         external_cache["avg_pattern_L1H1"] = torch.randn(
             1, self.input_size, self.input_size
         )
+
+        # Example call
         cache = self.MODEL.forward(
             self.INPUTS,
-            ["all"],
+            target_token_positions=["all"],
             pivot_positions=[4],
             extraction_config=ExtractionConfig(
-                extract_attn_pattern=True, avg_over_example=True
+                extract_attn_pattern=True,
+                avg_over_example=True,
+                attn_pattern_row_positions=["last"]
             ),
             external_cache=external_cache,
             batch_idx=1,
         )
-        # assert that cache["avg_attn_pattern_0"] has shape (1, 4, 16, 16)
+
+        # Assert that cache["avg_pattern_L1H1"] has shape (1, self.input_size, self.input_size)
         self.assertIn("avg_pattern_L1H1", external_cache)
         self.assertEqual(
             external_cache["avg_pattern_L1H1"].shape,
             (1, self.input_size, self.input_size),
         )
+
+    def test_attn_pattern_all_methods_and_row_partitions(self):
+        """
+        Expanded test to verify that attention_pattern_head handles
+        multiple avg_methods and row_partitions as intended.
+        """
+        methods = [
+            "mean",
+            "sum", 
+            "baseline_ratio"
+        ]
+        
+        # Example partitions:
+        #  1) None -> uses the same token groups as `target_token_positions`
+        #  2) "last" -> if your code interprets strings as special instructions 
+        #  3) "all"  -> similarly
+        #  4) Explicit partitions as a list of tuples, e.g. [(0,1,2), (3,4,5)]
+        row_partitions = [
+            None,
+            ["all"],
+            ["last"],
+            [(0,3), (3,5)],  # example: two groups
+        ]
+        
+        for method in methods:
+            for partition in row_partitions:
+                with self.subTest(method=method, row_partition=partition):
+                    # You can create a fresh cache each time, or reuse if you prefer.
+
+                    # Example call: pick some pivot positions or target token positions.
+                    # Here we do something more interesting than the single pivot=4
+                    # so you can see how multiple groups might be tested.
+                    # If your code needs token_positions to be a list of tuples, you can do so:
+                    target_pos = [(0, 1), (2, 3)]  # example grouping
+                    pivot_pos = [4, 5]            # just an example
+
+                    cache = self.MODEL.forward(
+                        self.INPUTS,
+                        target_token_positions=target_pos,
+                        pivot_positions=pivot_pos,
+                        extraction_config=ExtractionConfig(
+                            extract_attn_pattern=True,
+                            avg_over_example=False,  # ensures we run the averaging path
+                            attn_pattern_avg=method, #type: ignore
+                            attn_pattern_row_positions=partition
+                        ),
+                        batch_idx=0,  # or 1, or whichever
+                    )
+
+                    # Depending on your usage, you might store the results in specific keys
+                    # For example, "pattern_L0H0", "pattern_L0H1", etc.
+                    # So we can assert they exist in external_cache:
+                    for h in range(self.MODEL.model_config.num_attention_heads):  # adapt to your model
+                        key = f"pattern_L0H{h}"
+                        # or if your code calls add_with_info as "pattern_L{layer}H{h}"
+                        # or "avg_pattern_L{layer}H{h}", etc.
+                        self.assertIn(key, cache.keys(), 
+                                      msg=f"Missing {key} in cache with method={method} partition={partition}")
+                        if partition is None:
+                            self.assertEqual(
+                                cache[key].shape,
+                                (1, 2, 2),
+                                msg=f"Shape mismatch for {key} with method={method} partition={partition}"
+                            )
+                        else:
+                            if len(partition) == 1:
+                                self.assertEqual(
+                                    cache[key].shape,
+                                    (1, 1, 2),
+                                    msg=f"Shape mismatch for {key} with method={method} partition={partition}"
+                                )
+                            elif len(partition) == 2:
+                                self.assertEqual(
+                                    cache[key].shape,
+                                    (1, 2, 2),
+                                    msg=f"Shape mismatch for {key} with method={method} partition={partition}"
+                                )
 
     def test_hook_extract_attn_pattern(self):
         cache = self.MODEL.forward(
@@ -424,19 +493,7 @@ class BaseHookedModelTestCase(unittest.TestCase):
             cache["pattern_L1H1"].shape, (1, self.input_size, self.input_size)
         )
         
-    def test_hook_extract_attn_pattern_avg(self):
-        cache = self.MODEL.forward(
-            self.INPUTS,
-            ["all", "last"],
-            pivot_positions=[4],
-            extraction_config=ExtractionConfig(extract_attn_pattern=True, avg=True),
-        )
-        
-        # assert that cache["attn_pattern_0"] has shape (1, 4, 16, 16)
-        self.assertIn("pattern_L1H1", cache)
-        self.assertEqual(
-            cache["pattern_L1H1"].shape, (1,2)
-        )
+
 
     def test_module_wrapper(self):
         """

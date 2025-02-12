@@ -182,8 +182,7 @@ class TokenIndex:
             )
 
         for i, group in positions_group.items():
-            tokens_group[i] = string_tokens[group[0] : group[1]]
-
+            tokens_group[i] = [string_tokens[j] for j in group]
         return tokens_group, positions_group
 
     def group_tokens_by_pivot_tokens(
@@ -207,7 +206,12 @@ class TokenIndex:
 
     def get_token_index(
         self,
-        tokens: Union[List[Union[str, int, Tuple[int, int]]], List[str], List[int], List[Tuple[int,int]]],
+        tokens: Union[
+            List[Union[str, int, Tuple[int, int]]],
+            List[str],
+            List[int],
+            List[Tuple[int, int]],
+        ],
         string_tokens: List[str],
         return_type: Literal["list", "dict", "all"] = "list",
     ) -> Union[List[int], Dict, Tuple[List[int], Dict]]:
@@ -283,7 +287,15 @@ class TokenIndex:
             [1]
         """
         # Convert single token to list for uniform processing
+        # assert that we have a list of tokens
+        if not isinstance(tokens, list):
+            raise ValueError(
+                "Tokens must be a list of strings or integers or tuples. Got {}".format(
+                    type(tokens)
+                )
+            )
 
+        # Check if all tokens are supported or not
         if not all(
             token in SUPPORTED_TOKENS
             or isinstance(token, int)
@@ -293,14 +305,15 @@ class TokenIndex:
             for token in tokens
         ):
             raise ValueError(
-                f"Unsupported token type: {tokens}. Supported tokens are: {SUPPORTED_TOKENS} and inputs-partition-0, inputs-partition-1, etc or random-inputs-partition-0, random-inputs-partition-1, etc or integer indices or slices (tuple of start, end)" 
+                f"Unsupported token type into: {tokens}. Supported tokens are: {SUPPORTED_TOKENS} and inputs-partition-0, inputs-partition-1, etc or random-inputs-partition-0, random-inputs-partition-1, etc or integer indices or slices (tuple of start, end)"
             )
 
         # Check if pivot_positions is required but not provided
         if self.pivot_positions is None and any(
-            isinstance(token, str) and (
-            token.startswith("inputs-partition-")
-            or token.startswith("random-inputs-partition-")
+            isinstance(token, str)
+            and (
+                token.startswith("inputs-partition-")
+                or token.startswith("random-inputs-partition-")
             )
             for token in tokens
         ):
@@ -318,7 +331,9 @@ class TokenIndex:
         return tokens_positions
 
     def get_tokens_positions(
-        self, tokens: List[Union[str, int, Tuple[int, int]]], token_indexes: Dict[str, List[int]]
+        self,
+        tokens: List[Union[str, int, Tuple[int, int]]],
+        token_indexes: Dict[str, List[int]],
     ) -> List[int]:
         tokens_positions = []
         position_dict = {
@@ -331,9 +346,21 @@ class TokenIndex:
         for token in tokens:
             if isinstance(token, int):
                 # tokens_positions.append((token))
+                # check if the absolute value of the token is less than the length of the string tokens
+                if abs(token) >= len(token_indexes["all"]):
+                    raise ValueError(f"Token {token} is out of range")
                 numeric_tokens[token] = [token]
             elif isinstance(token, tuple):
                 start, end = token
+                # check if the start and end are within the range of the string tokens
+                if start >= len(token_indexes["all"]) or end >= len(
+                    token_indexes["all"]
+                ):
+                    raise ValueError(f"Token {token} is out of range")
+                elif start > end:
+                    raise ValueError(
+                        f"Token {token} is invalid. The start index must be less than the end index"
+                    )
                 numeric_tokens[token] = list(range(start, end))
             elif token.startswith("random-inputs-partition-"):
                 group, n = self.parse_random_group_token(token)
@@ -349,7 +376,7 @@ class TokenIndex:
         token_dict = self.get_token_dict(token_indexes, random_position_dict)
         # add the numeric indexe
         token_dict = {**token_dict, **numeric_tokens}
-            
+
         for token in tokens:
             if token_dict[token] is not None:
                 tokens_positions.append(tuple(token_dict[token]))  # type: ignore
@@ -394,4 +421,3 @@ class TokenIndex:
             },
             **random_position_dict,
         }
-

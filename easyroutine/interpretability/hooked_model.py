@@ -7,11 +7,11 @@ from easyroutine.interpretability.models import (
     TokenizerFactory,
     InputHandler,
 )
-from easyroutine.interpretability.token_index import TokenIndex, TokenType
+from easyroutine.interpretability.token_index import TokenIndex
 from easyroutine.interpretability.activation_cache import ActivationCache
 from easyroutine.interpretability.utils import get_attribute_by_name
 from easyroutine.interpretability.module_wrappers.manager import ModuleWrapperManager
-from easyroutine.logger import Logger, LambdaLogger
+from easyroutine.logger import Logger
 from tqdm import tqdm
 from dataclasses import dataclass
 from easyroutine.interpretability.ablation import AblationManager
@@ -87,6 +87,8 @@ class ExtractionConfig:
         avg (bool): if True, extract the average of the activations over the target positions
         avg_over_example (bool): if True, extract the average of the activations over the examples (it required a external cache to save the running avg)
         attn_heads (Union[list[dict], Literal["all"]]): list of dictionaries with the layer and head to extract the attention pattern or 'all' to
+        attn_pattern_avg (Literal["mean", "sum", "baseline_ratio", "none"]): the type of average to perform over the attention pattern. See hook.py attention_pattern_head for more details 
+        attn_pattern_row_positions (Optional[Union[List[int], List[Tuple], List[str], List[Union[int, Tuple, str]]]): the row positions of the attention pattern to extract. See hook.py attention_pattern_head for more details
     """
 
     extract_resid_in: bool = False
@@ -108,6 +110,10 @@ class ExtractionConfig:
     avg: bool = False
     avg_over_example: bool = False
     attn_heads: Union[list[dict], Literal["all"]] = "all"
+    attn_pattern_avg: Literal["mean", "sum", "baseline_ratio", "none"] = "none"
+    attn_pattern_row_positions: Optional[
+        Union[List[int], List[Tuple], List[str], List[Union[int, Tuple, str]]]
+    ] = None
 
     def is_not_empty(self):
         """
@@ -402,6 +408,9 @@ class HookedModel:
         for tok in tokens:
             string_tokens.append(self.hf_tokenizer.decode(tok))  # type: ignore
         return string_tokens
+    
+
+
 
     def create_hooks(
         self,
@@ -837,7 +846,7 @@ class HookedModel:
                                 batch_idx=batch_idx,
                                 cache=cache,
                                 # avg=extraction_config.avg,
-                                extract_avg_value=extraction_config.extract_head_values_projected,
+                                extract_avg_value=extraction_config.extract_head_values_projected
                             ),
                         }
                         for i in range(0, self.model_config.num_hidden_layers)
@@ -852,7 +861,8 @@ class HookedModel:
                             cache=cache,
                             layer=i,
                             head=head,
-                            avg=extraction_config.avg,
+                            attn_pattern_avg=extraction_config.attn_pattern_avg,
+                            attn_pattern_row_partition = None if extraction_config.attn_pattern_row_positions is None else token_dict["attn_pattern_row_positions"],
                         ),
                     }
                     for i, head in zip(layer_indexes, head_indexes)
@@ -867,7 +877,12 @@ class HookedModel:
     def forward(
         self,
         inputs,
-        target_token_positions: Union[List[Union[str, int, Tuple[int, int]]], List[str], List[int], List[Tuple[int,int]]] = ["last"],
+        target_token_positions: Union[
+            List[Union[str, int, Tuple[int, int]]],
+            List[str],
+            List[int],
+            List[Tuple[int, int]],
+        ] = ["last"],
         pivot_positions: Optional[List[int]] = None,
         extraction_config: ExtractionConfig = ExtractionConfig(),
         ablation_queries: Optional[List[dict]] = None,
@@ -910,13 +925,22 @@ class HookedModel:
         string_tokens = self.to_string_tokens(
             self.input_handler.get_input_ids(inputs).squeeze()
         )
-        token_indexes, token_dict = TokenIndex(
+        token_index_finder = TokenIndex(
             self.config.model_name, pivot_positions=pivot_positions
-        ).get_token_index(
+        )
+        token_indexes, token_dict = token_index_finder.get_token_index(
             tokens=target_token_positions,
             string_tokens=string_tokens,
             return_type="all",
         )
+        if extraction_config.attn_pattern_row_positions is not None:
+            token_row_indexes, _ = token_index_finder.get_token_index(
+                tokens=extraction_config.attn_pattern_row_positions,
+                string_tokens=string_tokens,
+                return_type="all",
+            )
+            token_dict["attn_pattern_row_positions"] = token_row_indexes
+        
         assert isinstance(token_indexes, list), "Token index must be a list"
         assert isinstance(token_dict, dict), "Token dict must be a dict"
 
@@ -952,7 +976,6 @@ class HookedModel:
 
         mapping_index = {}
         current_index = 0
-
 
         for token in target_token_positions:
             mapping_index[token] = []
@@ -1134,7 +1157,12 @@ class HookedModel:
     def extract_cache(
         self,
         dataloader,
-        target_token_positions: Union[List[Union[str, int, Tuple[int, int]]], List[str], List[int], List[Tuple[int,int]]],
+        target_token_positions: Union[
+            List[Union[str, int, Tuple[int, int]]],
+            List[str],
+            List[int],
+            List[Tuple[int, int]],
+        ],
         batch_saver: Callable = lambda x: None,
         move_to_cpu_after_forward: bool = True,
         # save_other_batch_elements: bool = False,
